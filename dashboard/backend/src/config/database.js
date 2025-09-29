@@ -3,6 +3,17 @@ const mongoose = require("mongoose");
 
 const connectDB = async () => {
   try {
+    console.log(
+      "Attempting to connect to MongoDB with URI:",
+      process.env.MONGODB_URI
+    );
+
+    if (!process.env.MONGODB_URI) {
+      console.error("MONGODB_URI is undefined in environment variables");
+      console.error("Environment variables:", Object.keys(process.env));
+      throw new Error("MongoDB URI is undefined. Please check your .env file");
+    }
+
     const conn = await mongoose.connect(process.env.MONGODB_URI, {
       useNewUrlParser: true,
       useUnifiedTopology: true,

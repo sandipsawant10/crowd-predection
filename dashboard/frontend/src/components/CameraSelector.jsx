@@ -1,23 +1,62 @@
 import React from "react";
-import { VideoCameraIcon } from "@heroicons/react/24/solid";
+import {
+  Box,
+  Typography,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
+  Avatar,
+} from "@mui/material";
+import { VideoCall as CameraIcon } from "@mui/icons-material";
 
+/**
+ * Modern camera selector component with Material-UI styling
+ * Features:
+ * - Clean select dropdown with proper labeling
+ * - Camera icon for visual clarity
+ * - Consistent Material Design patterns
+ */
 export default function CameraSelector({ locations, selected, onChange }) {
   return (
-    <div className="mb-8 p-4 rounded-xl bg-gradient-to-r from-gray-50 to-blue-50 shadow">
-      <label className="font-bold mr-4 flex items-center gap-2 text-blue-700">
-        <VideoCameraIcon className="w-5 h-5" /> Select Camera Feed:
-      </label>
-      <select
-        className="border-2 border-blue-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-400 transition-all"
-        value={selected}
-        onChange={(e) => onChange(e.target.value)}
-      >
-        {locations.map((loc) => (
-          <option key={loc.id} value={loc.id}>
-            {loc.name}
-          </option>
-        ))}
-      </select>
-    </div>
+    <Box>
+      <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 2 }}>
+        <Avatar
+          sx={{
+            bgcolor: "primary.main",
+            width: 32,
+            height: 32,
+          }}
+        >
+          <CameraIcon fontSize="small" />
+        </Avatar>
+        <Typography variant="h6" sx={{ fontWeight: 600 }}>
+          Camera Selection
+        </Typography>
+      </Box>
+
+      <FormControl fullWidth>
+        <InputLabel id="camera-select-label">Select Camera Feed</InputLabel>
+        <Select
+          labelId="camera-select-label"
+          value={selected}
+          label="Select Camera Feed"
+          onChange={(e) => onChange(e.target.value)}
+        >
+          {locations.map((loc) => (
+            <MenuItem key={loc.id} value={loc.id}>
+              <Box sx={{ display: "flex", flexDirection: "column" }}>
+                <Typography variant="body1">{loc.name}</Typography>
+                {loc.location && (
+                  <Typography variant="caption" color="text.secondary">
+                    {loc.location}
+                  </Typography>
+                )}
+              </Box>
+            </MenuItem>
+          ))}
+        </Select>
+      </FormControl>
+    </Box>
   );
 }

@@ -1,5 +1,7 @@
 import React from "react";
 import { Line } from "react-chartjs-2";
+import { Card, CardContent, Typography, Box, Alert } from "@mui/material";
+import { TrendingUp as TrendingUpIcon } from "@mui/icons-material";
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -23,18 +25,42 @@ ChartJS.register(
 
 export default function ChartCrowdForecast({ chartData, alert }) {
   return (
-    <div className="bg-white rounded-xl shadow-lg p-6 mb-8">
-      <h2 className="text-xl font-bold mb-4 text-purple-700">
-        Future Crowd Growth (Next 10 Minutes)
-      </h2>
-      <div className="bg-purple-50 rounded-lg p-4">
-        <Line data={chartData} />
-      </div>
-      {alert && (
-        <div className="mt-4 p-3 bg-red-100 text-red-700 rounded-lg font-semibold shadow">
-          {alert}
-        </div>
-      )}
-    </div>
+    <Card sx={{ mb: 3, borderRadius: 2, boxShadow: 2 }}>
+      <CardContent sx={{ p: 3 }}>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 2 }}>
+          <TrendingUpIcon sx={{ color: "secondary.main" }} />
+          <Typography
+            variant="h6"
+            sx={{ fontWeight: 600, color: "secondary.main" }}
+          >
+            Future Crowd Growth (Next 10 Minutes)
+          </Typography>
+        </Box>
+        <Box
+          sx={{
+            backgroundColor: "secondary.light",
+            borderRadius: 2,
+            p: 2,
+            "& canvas": {
+              borderRadius: 1,
+            },
+          }}
+        >
+          <Line data={chartData} />
+        </Box>
+        {alert && (
+          <Alert
+            severity="warning"
+            sx={{
+              mt: 2,
+              fontWeight: 600,
+              borderRadius: 2,
+            }}
+          >
+            {alert}
+          </Alert>
+        )}
+      </CardContent>
+    </Card>
   );
 }

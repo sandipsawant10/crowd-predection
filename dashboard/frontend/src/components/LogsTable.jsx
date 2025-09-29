@@ -1,60 +1,117 @@
 import React from "react";
-import { ArrowDownTrayIcon } from "@heroicons/react/24/solid";
+import {
+  Card,
+  CardContent,
+  Typography,
+  Button,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Paper,
+  Box,
+  Chip,
+  Stack,
+} from "@mui/material";
+import {
+  Download as DownloadIcon,
+  Assessment as AssessmentIcon,
+} from "@mui/icons-material";
 
 export default function LogsTable({ logs, onDownload }) {
   return (
-    <div className="bg-white rounded-xl shadow-lg p-6 mb-8">
-      <h2 className="text-xl font-bold mb-4 text-gray-800 flex items-center gap-2">
-        <span>System Logs</span>
-        <span className="inline-block px-2 py-1 bg-gray-200 text-xs rounded-full font-semibold">
-          {logs.length} entries
-        </span>
-      </h2>
-      <div className="mb-4 flex gap-4">
-        <button
-          className="bg-gray-700 text-white px-4 py-2 rounded-lg shadow hover:bg-gray-900 transition-all flex items-center gap-2"
-          onClick={() => onDownload("json")}
+    <Card sx={{ mb: 3, borderRadius: 2, boxShadow: 2 }}>
+      <CardContent sx={{ p: 3 }}>
+        <Box
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            mb: 3,
+          }}
         >
-          <ArrowDownTrayIcon className="w-5 h-5" /> Download JSON
-        </button>
-        <button
-          className="bg-gray-700 text-white px-4 py-2 rounded-lg shadow hover:bg-gray-900 transition-all flex items-center gap-2"
-          onClick={() => onDownload("csv")}
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+            <AssessmentIcon sx={{ color: "text.primary" }} />
+            <Typography variant="h6" sx={{ fontWeight: 600 }}>
+              System Logs
+            </Typography>
+            <Chip
+              label={`${logs.length} entries`}
+              size="small"
+              color="primary"
+              variant="outlined"
+            />
+          </Box>
+        </Box>
+
+        <Stack direction="row" spacing={2} sx={{ mb: 3 }}>
+          <Button
+            variant="contained"
+            startIcon={<DownloadIcon />}
+            onClick={() => onDownload("json")}
+            sx={{ borderRadius: 2 }}
+          >
+            Download JSON
+          </Button>
+          <Button
+            variant="contained"
+            startIcon={<DownloadIcon />}
+            onClick={() => onDownload("csv")}
+            sx={{ borderRadius: 2 }}
+          >
+            Download CSV
+          </Button>
+        </Stack>
+
+        <TableContainer
+          component={Paper}
+          sx={{ borderRadius: 2, border: 1, borderColor: "divider" }}
         >
-          <ArrowDownTrayIcon className="w-5 h-5" /> Download CSV
-        </button>
-      </div>
-      <table className="w-full text-left border rounded-lg overflow-hidden">
-        <thead>
-          <tr className="bg-gray-200">
-            <th className="px-4 py-2">Time</th>
-            <th className="px-4 py-2">Type</th>
-            <th className="px-4 py-2">Value</th>
-          </tr>
-        </thead>
-        <tbody>
-          {logs.length === 0 ? (
-            <tr>
-              <td className="px-4 py-2 text-gray-500" colSpan={3}>
-                No logs yet.
-              </td>
-            </tr>
-          ) : (
-            logs.map((log, idx) => (
-              <tr
-                key={idx}
-                className={idx % 2 === 0 ? "bg-white" : "bg-gray-50"}
-              >
-                <td className="px-4 py-2">{log.time}</td>
-                <td className="px-4 py-2 font-semibold text-gray-700">
-                  {log.type}
-                </td>
-                <td className="px-4 py-2">{log.value}</td>
-              </tr>
-            ))
-          )}
-        </tbody>
-      </table>
-    </div>
+          <Table>
+            <TableHead>
+              <TableRow sx={{ backgroundColor: "grey.100" }}>
+                <TableCell sx={{ fontWeight: 600 }}>Time</TableCell>
+                <TableCell sx={{ fontWeight: 600 }}>Type</TableCell>
+                <TableCell sx={{ fontWeight: 600 }}>Value</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {logs.length === 0 ? (
+                <TableRow>
+                  <TableCell
+                    colSpan={3}
+                    sx={{ textAlign: "center", color: "text.secondary", py: 4 }}
+                  >
+                    No logs yet.
+                  </TableCell>
+                </TableRow>
+              ) : (
+                logs.map((log, idx) => (
+                  <TableRow
+                    key={idx}
+                    sx={{
+                      "&:nth-of-type(odd)": { backgroundColor: "grey.50" },
+                      "&:hover": { backgroundColor: "action.hover" },
+                    }}
+                  >
+                    <TableCell>{log.time}</TableCell>
+                    <TableCell>
+                      <Typography
+                        sx={{ fontWeight: 600, color: "text.primary" }}
+                      >
+                        {log.type}
+                      </Typography>
+                    </TableCell>
+                    <TableCell>{log.value}</TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </TableContainer>
+      </CardContent>
+    </Card>
   );
 }
