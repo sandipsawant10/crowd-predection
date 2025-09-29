@@ -1,5 +1,5 @@
 // src/controllers/authController.js
-const User = require("../models/User");
+const User = require("../../../crowd-management-backend/src/models/User");
 const jwt = require("jsonwebtoken");
 
 /**

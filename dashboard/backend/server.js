@@ -16,11 +16,11 @@ dotenv.config();
 const connectDB = require("./src/config/database");
 
 // Import routes
-const authRoutes = require("./src/routes/authRoutes");
-const crowdRoutes = require("./src/routes/crowdRoutes");
-const alertRoutes = require("./src/routes/alertRoutes");
-const cameraRoutes = require("./src/routes/cameraRoutes");
-const actionRoutes = require("./src/routes/actionRoutes");
+const authRoutes = require("./crowd-management-backend/src/routes/authRoutes");
+const crowdRoutes = require("./crowd-management-backend/src/routes/crowdRoutes");
+const alertRoutes = require("./crowd-management-backend/src/routes/alertRoutes");
+const cameraRoutes = require("./crowd-management-backend/src/routes/cameraRoutes");
+const actionRoutes = require("./crowd-management-backend/src/routes/actionRoutes");
 
 // Import middleware
 const errorHandler = require("./src/middleware/errorHandler");

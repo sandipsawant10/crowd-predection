@@ -1,7 +1,7 @@
 // src/controllers/alertController.js
-const Alert = require("../models/Alert");
-const Camera = require("../models/Camera");
-const alertService = require("../services/alertService");
+const Alert = require("../../../crowd-management-backend/src/models/Alert");
+const Camera = require("../../../crowd-management-backend/src/models/Camera");
+const alertService = require("../../../crowd-management-backend/src/services/alertService");
 
 /**
  * @desc    Create a new alert

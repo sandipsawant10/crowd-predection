@@ -1,6 +1,6 @@
 // src/controllers/cameraController.js
-const Camera = require("../models/Camera");
-const cameraService = require("../services/cameraService");
+const Camera = require("../../../crowd-management-backend/src/models/Camera");
+const cameraService = require("../../../crowd-management-backend/src/services/cameraService");
 
 /**
  * @desc    Register a new camera
