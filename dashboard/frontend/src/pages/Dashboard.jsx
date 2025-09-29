@@ -12,7 +12,6 @@ import {
 } from "../utils/api";
 import { downloadFile } from "../utils/download";
 
-// Dummy API endpoints
 const PEOPLE_COUNT_API = "/api/people_count";
 const CROWD_HISTORY_API = "/api/crowd_history";
 const CROWD_FORECAST_API = "/api/crowd_forecast";
@@ -23,7 +22,6 @@ const CAMERA_LOCATIONS = [
   { id: "exit", name: "Exit Gate", x: 350, y: 60 },
 ];
 
-// Dummy system health data
 const SYSTEM_HEALTH = [
   { name: "Detection Model", status: "running" },
   { name: "Forecasting Model", status: "running" },
@@ -36,7 +34,7 @@ export default function Dashboard() {
     { time: "10:00", type: "count", value: 120 },
     { time: "10:01", type: "prediction", value: 130 },
     { time: "10:02", type: "alert", value: "Threshold Crossed" },
-  ]); // Dummy logs, replace with API
+  ]);
   const [peopleCount, setPeopleCount] = useState(0);
   const [crowdHistory, setCrowdHistory] = useState([]);
   const [crowdForecast, setCrowdForecast] = useState([]);
@@ -48,9 +46,8 @@ export default function Dashboard() {
     gate1: { count: 80, zone: "safe" },
     platform3: { count: 130, zone: "danger" },
     exit: { count: 100, zone: "warning" },
-  }); // Dummy data, replace with API
+  });
 
-  // Fetch live people count
   useEffect(() => {
     const fetchCount = async () => {
       try {
@@ -69,7 +66,7 @@ export default function Dashboard() {
         } else {
           setPopupAlert(false);
         }
-      } catch (err) {
+      } catch {
         setPeopleCount(0);
       }
     };
@@ -78,13 +75,12 @@ export default function Dashboard() {
     return () => clearInterval(interval);
   }, []);
 
-  // Fetch crowd history for chart
   useEffect(() => {
     const fetchHistory = async () => {
       try {
         const data = await fetchCrowdHistory(CROWD_HISTORY_API);
         setCrowdHistory(data.history);
-      } catch (err) {
+      } catch {
         setCrowdHistory([]);
       }
     };
@@ -93,7 +89,6 @@ export default function Dashboard() {
     return () => clearInterval(interval);
   }, []);
 
-  // Fetch crowd forecast for next 10 minutes
   useEffect(() => {
     const fetchForecast = async () => {
       try {
@@ -113,7 +108,7 @@ export default function Dashboard() {
         } else {
           setAlert("");
         }
-      } catch (err) {
+      } catch {
         setCrowdForecast([]);
         setAlert("");
       }
@@ -123,46 +118,40 @@ export default function Dashboard() {
     return () => clearInterval(interval);
   }, []);
 
-  // Chart data
   const chartData = {
     labels: crowdHistory.map((item) => item.time),
     datasets: [
       {
         label: "Crowd Count",
         data: crowdHistory.map((item) => item.count),
-        fill: false,
-        borderColor: "rgb(75, 192, 192)",
-        tension: 0.1,
+        fill: true,
+        borderColor: "#60a5fa",
+        backgroundColor: "rgba(96,165,250,0.2)",
+        tension: 0.3,
       },
     ],
   };
 
-  // Forecast chart data
   const forecastChartData = {
     labels: crowdForecast.map((item) => `${item.in} min`),
     datasets: [
       {
         label: "Predicted Crowd",
         data: crowdForecast.map((item) => item.count),
-        fill: false,
-        borderColor: crowdForecast.map((item) => {
-          if (item.zone === "danger") return "#ef4444";
-          if (item.zone === "warning") return "#facc15";
-          return "#22c55e";
-        }),
-        tension: 0.1,
+        fill: true,
+        borderColor: "#a855f7",
+        backgroundColor: "rgba(168,85,247,0.2)",
+        tension: 0.3,
       },
     ],
   };
 
-  // Helper for zone color
   const getZoneColor = (zone) => {
-    if (zone === "danger") return "bg-red-500";
-    if (zone === "warning") return "bg-yellow-400";
-    return "bg-green-500";
+    if (zone === "danger") return "bg-red-600 ring-4 ring-red-400 animate-pulse";
+    if (zone === "warning") return "bg-yellow-500 ring-4 ring-yellow-300";
+    return "bg-green-600 ring-4 ring-green-300";
   };
 
-  // Authority control handlers
   const handleRedirectCrowd = () => {
     setActionsLog((prev) => [
       {
@@ -187,28 +176,37 @@ export default function Dashboard() {
     alert("Request Police/Staff action triggered!");
   };
 
-  // Download logs as JSON or CSV
   const downloadLogs = (format) => {
     downloadFile(logs, format, "logs");
   };
 
   return (
-    <div className="p-6 max-w-2xl mx-auto">
-      <h1 className="text-2xl font-bold mb-4">Smart Crowd Dashboard</h1>
+    <div className="p-8 max-w-7xl mx-auto space-y-10 bg-gradient-to-br from-slate-900 via-gray-900 to-black min-h-screen text-gray-100">
+      {/* Dashboard Title */}
+      <h1 className="text-4xl font-extrabold text-center bg-gradient-to-r from-blue-400 via-purple-400 to-pink-400 bg-clip-text text-transparent tracking-wide drop-shadow-lg">
+        🚦 Smart Crowd & Traffic Dashboard
+      </h1>
+
+      {/* System Health */}
       <SystemHealth health={SYSTEM_HEALTH} />
+
+      {/* Camera Selector */}
       <CameraSelector
         locations={CAMERA_LOCATIONS}
         selected={selectedCamera}
         onChange={setSelectedCamera}
       />
-      {/* Map View with Crowd Indicators */}
-      <div className="mb-8">
-        <h2 className="text-lg font-semibold mb-2">Location Map</h2>
-        <div className="relative w-full h-48 bg-gray-200 rounded">
+
+      {/* Location Map */}
+      <div className="mb-8 bg-gradient-to-r from-slate-800 to-slate-700 rounded-2xl shadow-2xl p-6 border border-gray-700 hover:shadow-purple-700/30 transition">
+        <h2 className="text-xl font-semibold mb-4 text-blue-300">
+          🗺 Location Map
+        </h2>
+        <div className="relative w-full h-56 bg-gradient-to-br from-gray-800 to-gray-700 rounded-xl shadow-inner">
           {CAMERA_LOCATIONS.map((loc) => (
             <div
               key={loc.id}
-              className={`absolute rounded-full w-10 h-10 flex items-center justify-center text-white font-bold shadow-lg ${getZoneColor(
+              className={`absolute rounded-full w-12 h-12 flex items-center justify-center text-white font-bold shadow-xl ${getZoneColor(
                 locationCrowdLevels[loc.id]?.zone
               )}`}
               style={{ left: loc.x, top: loc.y }}
@@ -218,65 +216,88 @@ export default function Dashboard() {
             </div>
           ))}
         </div>
-        <div className="flex gap-4 mt-2">
+        <div className="flex gap-6 mt-4 text-sm text-gray-300">
           <span className="flex items-center">
-            <span className="w-4 h-4 bg-green-500 rounded-full mr-1"></span>Safe
+            <span className="w-4 h-4 bg-green-600 rounded-full mr-2"></span>
+            Safe
           </span>
           <span className="flex items-center">
-            <span className="w-4 h-4 bg-yellow-400 rounded-full mr-1"></span>
+            <span className="w-4 h-4 bg-yellow-500 rounded-full mr-2"></span>
             Warning
           </span>
           <span className="flex items-center">
-            <span className="w-4 h-4 bg-red-500 rounded-full mr-1"></span>Danger
+            <span className="w-4 h-4 bg-red-600 rounded-full mr-2"></span>
+            Danger
           </span>
         </div>
       </div>
+
+      {/* Crowd Control */}
       <CrowdControl
         onRedirect={handleRedirectCrowd}
         onRequestPolice={handleRequestPolice}
         actionsLog={actionsLog}
       />
+
+      {/* Popup Alert */}
       {popupAlert && (
-        <div className="fixed top-4 left-1/2 transform -translate-x-1/2 z-50 bg-yellow-400 text-black px-6 py-3 rounded shadow-lg font-bold text-lg">
+        <div className="fixed top-6 left-1/2 transform -translate-x-1/2 z-50 bg-gradient-to-r from-yellow-400 to-yellow-600 text-black px-8 py-4 rounded-xl shadow-2xl font-bold text-lg animate-bounce">
           🚨 Crowd threshold crossed! ({peopleCount})
         </div>
       )}
-      <div className="bg-white rounded shadow p-4 mb-6 flex items-center justify-between">
-        <span className="text-lg">Live People Count:</span>
-        <span className="text-3xl font-bold text-blue-600">{peopleCount}</span>
+
+      {/* Live Count */}
+      <div className="bg-gradient-to-r from-indigo-700 to-blue-700 rounded-2xl shadow-lg p-6 flex items-center justify-between text-white">
+        <span className="text-lg font-medium">👥 Live People Count:</span>
+        <span className="text-4xl font-extrabold drop-shadow">{peopleCount}</span>
       </div>
+
+      {/* Charts */}
       <ChartCrowdHistory chartData={chartData} />
       <ChartCrowdForecast chartData={forecastChartData} alert={alert} />
-      {/* Alert Log Table */}
-      <div className="bg-white rounded shadow p-4 mb-6">
-        <h2 className="text-lg font-semibold mb-2">Alert Log</h2>
-        <table className="w-full text-left border">
-          <thead>
-            <tr className="bg-gray-100">
-              <th className="px-2 py-1">Time</th>
-              <th className="px-2 py-1">Crowd Count</th>
-              <th className="px-2 py-1">Type</th>
-            </tr>
-          </thead>
-          <tbody>
-            {alertLog.length === 0 ? (
-              <tr>
-                <td className="px-2 py-1" colSpan={3}>
-                  No alerts yet.
-                </td>
+
+      {/* Alert Log */}
+      <div className="bg-gradient-to-r from-slate-800 to-gray-800 rounded-2xl shadow-lg p-6 border border-gray-700 hover:shadow-indigo-700/30 transition">
+        <h2 className="text-xl font-semibold mb-4 text-purple-300">
+          🔔 Alert Log
+        </h2>
+        <div className="overflow-hidden rounded-xl border border-gray-700">
+          <table className="w-full text-left">
+            <thead>
+              <tr className="bg-slate-700 text-gray-200">
+                <th className="px-3 py-3">Time</th>
+                <th className="px-3 py-3">Crowd Count</th>
+                <th className="px-3 py-3">Type</th>
               </tr>
-            ) : (
-              alertLog.map((log, idx) => (
-                <tr key={idx}>
-                  <td className="px-2 py-1">{log.time}</td>
-                  <td className="px-2 py-1">{log.count}</td>
-                  <td className="px-2 py-1">{log.type}</td>
+            </thead>
+            <tbody>
+              {alertLog.length === 0 ? (
+                <tr>
+                  <td
+                    className="px-3 py-3 text-gray-400 text-center"
+                    colSpan={3}
+                  >
+                    No alerts yet.
+                  </td>
                 </tr>
-              ))
-            )}
-          </tbody>
-        </table>
+              ) : (
+                alertLog.map((log, idx) => (
+                  <tr
+                    key={idx}
+                    className="hover:bg-slate-700 transition-colors even:bg-slate-800"
+                  >
+                    <td className="px-3 py-3">{log.time}</td>
+                    <td className="px-3 py-3">{log.count}</td>
+                    <td className="px-3 py-3 font-medium">{log.type}</td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
+
+      {/* Logs Table */}
       <LogsTable logs={logs} onDownload={downloadLogs} />
     </div>
   );

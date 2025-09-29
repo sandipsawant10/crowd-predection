@@ -23,15 +23,36 @@ ChartJS.register(
 
 export default function ChartCrowdForecast({ chartData, alert }) {
   return (
-    <div className="bg-white rounded-xl shadow-lg p-6 mb-8">
-      <h2 className="text-xl font-bold mb-4 text-purple-700">
-        Future Crowd Growth (Next 10 Minutes)
+    <div className="bg-gradient-to-r from-slate-900 to-gray-900 rounded-2xl shadow-lg p-6 mb-8 border border-gray-700 hover:shadow-purple-700/30 transition">
+      <h2 className="text-2xl font-bold mb-4 text-purple-300 flex items-center gap-2">
+        🚦 Forecasted Crowd Growth (Next 10 Minutes)
       </h2>
-      <div className="bg-purple-50 rounded-lg p-4">
-        <Line data={chartData} />
+      <div className="bg-slate-800 rounded-xl p-5 shadow-inner">
+        <Line
+          data={chartData}
+          options={{
+            responsive: true,
+            plugins: {
+              legend: {
+                display: true,
+                labels: { color: "#e5e7eb", font: { size: 14 } },
+              },
+            },
+            scales: {
+              x: {
+                ticks: { color: "#e5e7eb" },
+                grid: { color: "rgba(255,255,255,0.1)" },
+              },
+              y: {
+                ticks: { color: "#e5e7eb" },
+                grid: { color: "rgba(255,255,255,0.1)" },
+              },
+            },
+          }}
+        />
       </div>
       {alert && (
-        <div className="mt-4 p-3 bg-red-100 text-red-700 rounded-lg font-semibold shadow">
+        <div className="mt-4 p-4 bg-gradient-to-r from-red-600 to-red-500 text-white rounded-lg font-semibold shadow-md border-l-4 border-red-400">
           {alert}
         </div>
       )}

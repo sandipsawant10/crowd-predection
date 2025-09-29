@@ -23,12 +23,33 @@ ChartJS.register(
 
 export default function ChartCrowdHistory({ chartData }) {
   return (
-    <div className="bg-white rounded-xl shadow-lg p-6 mb-8">
-      <h2 className="text-xl font-bold mb-4 text-blue-700">
-        Crowd Count (Last 15 Minutes)
+    <div className="bg-gradient-to-r from-slate-900 to-gray-900 rounded-2xl shadow-lg p-6 mb-8 border border-gray-700 hover:shadow-blue-700/30 transition">
+      <h2 className="text-2xl font-bold mb-5 text-blue-300 flex items-center gap-2">
+        📈 Crowd Count (Last 15 Minutes)
       </h2>
-      <div className="bg-blue-50 rounded-lg p-4">
-        <Line data={chartData} />
+      <div className="bg-slate-800 rounded-xl p-5 shadow-inner">
+        <Line
+          data={chartData}
+          options={{
+            responsive: true,
+            plugins: {
+              legend: {
+                display: true,
+                labels: { color: "#e5e7eb", font: { size: 14 } }, // light gray for visibility
+              },
+            },
+            scales: {
+              x: {
+                ticks: { color: "#e5e7eb" },
+                grid: { color: "rgba(255,255,255,0.1)" },
+              },
+              y: {
+                ticks: { color: "#e5e7eb" },
+                grid: { color: "rgba(255,255,255,0.1)" },
+              },
+            },
+          }}
+        />
       </div>
     </div>
   );

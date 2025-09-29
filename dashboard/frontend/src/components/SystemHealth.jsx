@@ -1,41 +1,34 @@
 import React from "react";
-import { CheckCircleIcon, XCircleIcon } from "@heroicons/react/24/solid";
 
 export default function SystemHealth({ health }) {
+  const getStatusStyle = (status) => {
+    if (status === "running")
+      return "bg-green-600 text-white px-3 py-1 rounded-full text-sm font-semibold shadow-md ring-2 ring-green-400";
+    if (status === "stopped")
+      return "bg-red-600 text-white px-3 py-1 rounded-full text-sm font-semibold shadow-md ring-2 ring-red-400";
+    return "bg-yellow-500 text-black px-3 py-1 rounded-full text-sm font-semibold shadow-md ring-2 ring-yellow-300";
+  };
+
   return (
-    <div className="mb-8 p-6 rounded-xl bg-gradient-to-r from-blue-50 to-blue-100 shadow-lg">
-      <h2 className="text-2xl font-bold mb-4 text-blue-700 flex items-center gap-2">
-        <span>System Health</span>
-        <span className="inline-block w-2 h-2 bg-green-400 rounded-full animate-pulse"></span>
+    <div className="bg-gradient-to-r from-slate-800 to-gray-800 rounded-2xl shadow-lg p-6 border border-gray-700">
+      <h2 className="text-2xl font-bold mb-5 text-blue-300 flex items-center gap-2">
+        ⚙️ System Health
       </h2>
-      <table className="w-full text-left border rounded-lg overflow-hidden">
-        <thead>
-          <tr className="bg-blue-200">
-            <th className="px-4 py-2">Service</th>
-            <th className="px-4 py-2">Status</th>
-          </tr>
-        </thead>
-        <tbody>
-          {health.map((svc, idx) => (
-            <tr key={idx} className={idx % 2 === 0 ? "bg-white" : "bg-blue-50"}>
-              <td className="px-4 py-2 font-medium">{svc.name}</td>
-              <td className="px-4 py-2 flex items-center gap-2">
-                {svc.status === "running" ? (
-                  <span className="flex items-center gap-1 text-green-600 font-bold">
-                    <CheckCircleIcon className="w-5 h-5" />
-                    <span>Running</span>
-                  </span>
-                ) : (
-                  <span className="flex items-center gap-1 text-red-600 font-bold">
-                    <XCircleIcon className="w-5 h-5" />
-                    <span>Stopped</span>
-                  </span>
-                )}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        {health.map((service, idx) => (
+          <div
+            key={idx}
+            className="flex justify-between items-center bg-slate-900 px-4 py-3 rounded-xl border border-gray-700 shadow hover:shadow-blue-500/20 transition"
+          >
+            <span className="text-lg font-medium text-gray-100">
+              {service.name}
+            </span>
+            <span className={getStatusStyle(service.status)}>
+              {service.status}
+            </span>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
