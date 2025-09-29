@@ -10,7 +10,5 @@ export default defineConfig({
   build: {
     outDir: "dist",
   },
-  css: {
-    postcss: "./postcss.config.js",
-  },
+  // Vite automatically loads postcss.config.js, no need to specify
 });
