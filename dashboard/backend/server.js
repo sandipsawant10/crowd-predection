@@ -105,13 +105,14 @@ const corsOptions = {
 app.use(cors(corsOptions));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.use(morgan("combined")); // Logging
+// Remove routine HTTP request logging
+// app.use(morgan("combined")); // Logging removed
 app.use("/api", limiter); // Apply rate limiting to all API routes
 
 // Health check endpoint with explicit CORS handling
 app.options("/health", cors(corsOptions)); // Enable preflight for health endpoint
 app.get("/health", cors(corsOptions), (req, res) => {
-  console.log("Health check request from origin:", req.headers.origin);
+  // Health check endpoint, no logging
   res.status(200).json({
     status: "OK",
     timestamp: new Date().toISOString(),
@@ -127,11 +128,60 @@ app.get("/favicon.ico", (req, res) => {
 });
 
 // API Routes
-app.use("/api/auth", authRoutes);
-app.use("/api/crowd", crowdRoutes);
-app.use("/api/alerts", alertRoutes);
-app.use("/api/cameras", cameraRoutes);
-app.use("/api/actions", actionRoutes);
+// API Routes with custom logging for important events
+app.use(
+  "/api/auth",
+  (req, res, next) => {
+    // Only log login/logout events
+    if (req.method === "POST" && req.originalUrl.endsWith("/login")) {
+      console.log(
+        `[IMPORTANT] Auth login attempt for user: ${
+          req.body?.username || "unknown"
+        }`
+      );
+    }
+    next();
+  },
+  authRoutes
+);
+
+app.use(
+  "/api/crowd",
+  (req, res, next) => {
+    // Only log prediction events
+    if (req.method === "POST" && req.originalUrl.includes("/predict")) {
+      console.log(`[IMPORTANT] Crowd prediction requested:`, req.body);
+    }
+    next();
+  },
+  crowdRoutes
+);
+
+app.use(
+  "/api/alerts",
+  (req, res, next) => {
+    // Only log alert creation
+    if (req.method === "POST") {
+      console.log(`[IMPORTANT] Alert created:`, req.body);
+    }
+    next();
+  },
+  alertRoutes
+);
+
+app.use("/api/cameras", cameraRoutes); // No important logs needed
+
+app.use(
+  "/api/actions",
+  (req, res, next) => {
+    // Only log action events
+    if (req.method === "POST") {
+      console.log(`[IMPORTANT] Action performed:`, req.body);
+    }
+    next();
+  },
+  actionRoutes
+);
 
 // Setup Socket.io handlers
 setupSocketHandlers(io);
