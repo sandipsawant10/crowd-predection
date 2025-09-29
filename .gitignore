@@ -5,8 +5,11 @@ __pycache__/
 *.so
 .Python
 env/
+<<<<<<< HEAD
+=======
 venv/
 ENV/
+>>>>>>> 2c6c130e4b1e8c72ecfc3c076b2ffb0ce4877cf4
 build/
 develop-eggs/
 dist/
@@ -22,6 +25,21 @@ wheels/
 *.egg-info/
 .installed.cfg
 *.egg
+<<<<<<< HEAD
+
+# Virtual Environment
+venv/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+
+# Project specific
+*.pt
+*.csv
+*.log
+=======
 
 # Jupyter Notebook
 .ipynb_checkpoints
@@ -56,6 +74,7 @@ logs
 *.log
 npm-debug.log*
 yarn-debug.log*
+>>>>>>> 2c6c130e4b1e8c72ecfc3c076b2ffb0ce4877cf4
 yarn-error.log*
 lerna-debug.log*
 

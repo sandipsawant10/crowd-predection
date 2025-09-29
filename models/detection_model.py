@@ -139,16 +139,31 @@ class PersonDetector:
             # HOG fallback
             return self._detect_hog_frame(frame_bgr)
 
-    def _detect_hog_frame(self, frame_bgr: np.ndarray) -> Tuple[int, List[Tuple[int, int, int, int]], np.ndarray]:
-        """Detect using OpenCV HOG person detector."""
+        def _detect_hog_frame(self, frame_bgr: np.ndarray) -> Tuple[int, List[Tuple[int, int, int, int]], np.ndarray]:
+            """Detect using OpenCV HOG person detector with NMS filtering."""
         gray = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2GRAY)
-        rects, weights = self.hog.detectMultiScale(gray, winStride=(8, 8), padding=(8, 8), scale=1.05)
-        boxes: List[Tuple[int, int, int, int]] = []
-        for (x, y, w, h) in rects:
-            boxes.append((int(x), int(y), int(x + w), int(y + h)))
-        # Optional: reduce overlapping boxes (groupRectangles not perfect here)
-        annotated = self._annotate_frame(frame_bgr, boxes, len(boxes), source_label="HOG")
-        return len(boxes), boxes, annotated
+        rects, weights = self.hog.detectMultiScale(
+            gray, winStride=(8, 8), padding=(8, 8), scale=1.05
+        )
+
+        # Convert to (x, y, x2, y2) format for NMS
+        boxes = []
+        confidences = []
+        for (x, y, w, h), w_conf in zip(rects, weights):
+            boxes.append([int(x), int(y), int(x + w), int(y + h)])
+            confidences.append(float(w_conf))
+
+        # Apply Non-Maximum Suppression to filter overlapping boxes
+        indices = cv2.dnn.NMSBoxes(boxes, confidences, score_threshold=0.3, nms_threshold=0.4)
+
+        filtered_boxes: List[Tuple[int, int, int, int]] = []
+        if len(indices) > 0:
+            for i in indices.flatten():
+                filtered_boxes.append(tuple(boxes[i]))
+
+        count = len(filtered_boxes)
+        annotated = self._annotate_frame(frame_bgr, filtered_boxes, count, source_label="HOG+NMS")
+        return count, filtered_boxes, annotated
 
     def _annotate_frame(self, frame_bgr: np.ndarray, boxes: List[Tuple[int, int, int, int]], count: int, source_label: str = "") -> np.ndarray:
         """Draw bounding boxes and overlay count on the frame (BGR)."""
@@ -197,6 +212,10 @@ class PersonDetector:
             cap = cv2.VideoCapture(src)
             if not cap.isOpened():
                 logger.error("Unable to open video source: %s", source)
+                if not os.path.exists(source):
+                    logger.error("The file does not exist at the specified path: %s", source)
+                else:
+                    logger.error("The file exists but could not be opened. Check format or permissions.")
                 return
         except Exception as e:
             logger.exception("Error opening source %s: %s", source, e)
@@ -305,9 +324,29 @@ def parse_args():
 def main_cli():
     args = parse_args()
     det = PersonDetector(yolo_weights=args.weights, conf=args.conf)
+
+    # Preferred: allow --source arg. If not provided, use fallback video.
+    if args.source and args.source != "0":
+        video_source = args.source
+    else:
+        # Fallback path: change this to your OS path as needed.
+        # Use the Linux-style path if running in this environment:
+        fallback_path_unix = "/mnt/data/6574291-hd_1280_720_25fps.mp4"
+        # Windows example fallback (raw string) - uncomment if running on Windows local machine:
+        # fallback_path_win = r"C:\NOVA\crowd-predection\videos\6574291-hd_1280_720_25fps.mp4"
+        # Choose which fallback to use automatically based on platform:
+        if os.name == "nt":
+            # Windows
+            video_source = r"C:\NOVA\crowd-predection\videos\6574291-hd_1280_720_25fps.mp4"
+        else:
+            # Linux/macOS/Colab/remote runner where file was uploaded
+            video_source = fallback_path_unix
+
+    logger.info("Using video source: %s", video_source)
+
     try:
         for event in det.stream(
-            source=args.source,
+            source=video_source,
             camera_id=args.camera_id,
             sample_rate=args.sample_rate,
             max_frames=args.max_frames,
@@ -320,6 +359,7 @@ def main_cli():
         logger.info("Interrupted by user.")
     except Exception as e:
         logger.exception("Error during streaming: %s", e)
+
 
 
 if __name__ == "__main__":
