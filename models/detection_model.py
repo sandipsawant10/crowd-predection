@@ -1,366 +1,408 @@
-"""
-models/detection_model.py
-
-Person detection module for Smart Crowd Management.
-
-Features:
-- Uses YOLOv8 (ultralytics) when available (recommended).
-- Falls back to OpenCV HOG person detector if YOLO isn't installed.
-- Functions:
-    - PersonDetector.detect_frame(frame) -> (count, boxes, annotated_bgr)
-    - PersonDetector.stream(source, sample_rate, ...) -> generator of dicts for each analyzed frame
-- Optional: save counts to CSV or SQLite (simple logger).
-- CLI for quick testing (webcam, video file, or RTSP).
-
-Requirements (for full features):
-    pip install opencv-python numpy
-    # if you want YOLOv8 (recommended for accuracy/speed):
-    pip install ultralytics
-    # (ultralytics brings torch as a dependency)
-"""
-
-from __future__ import annotations
-import os
-import sys
-import time
-import json
-import csv
-import argparse
-import logging
-from datetime import datetime
-from typing import List, Tuple, Iterable, Optional, Dict, Generator
-
+from ultralytics import YOLO
 import numpy as np
 import cv2
+import torch
+import argparse
+import csv
+import math
+import time
+from collections import deque
+import json
+from datetime import datetime
 
-# logger
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s"
-)
-logger = logging.getLogger("detection_model")
-
-
-class PersonDetector:
-    """
-    Unified person detector wrapper.
-    Attempts to use YOLOv8 (ultralytics). If unavailable, uses OpenCV HOG detector.
-
-    Typical use:
-        det = PersonDetector(yolo_weights="yolov8n.pt", conf=0.35)
-        count, boxes, annotated = det.detect_frame(frame)
-        for event in det.stream(source="0"): ...
-    """
-
-    def __init__(
-        self,
-        yolo_weights: str = "yolov8n.pt",
-        conf: float = 0.25,
-        use_gpu: Optional[str] = None,  # 'cuda'|'cpu'|None
-    ):
-        self.conf = conf
-        self.model = None
-        self.use_yolo = False
-        self.device = "cpu"
-
-        # Try to import ultralytics YOLO
+class CrowdAnalyzer:
+    def __init__(self,  # Fix: Changed from _init_ to __init__
+                 yolo_weights,
+                 device="cpu",
+                 min_head_radius=5,
+                 max_head_radius=30,
+                 conf_threshold=0.35,
+                 iou_threshold=0.5,
+                 imgsz=640,
+                 max_det=300,
+                 head_top_ratio=0.18,
+                 head_radius_scale=0.25,
+                 smooth_window=30,
+                 circle_nms_factor=0.8,
+                 min_bbox_area=600,
+                 adaptive=True,
+                 target_fps=24,
+                 min_imgsz=448,
+                 max_imgsz=960,
+                 enable_refine=True,
+                 refine_top_scale=0.3,
+                 hough_dp=1.2,
+                 hough_min_dist=8,
+                 hough_param1=120,
+                 hough_param2=12,
+                 hough_min_radius_scale=0.15,
+                 hough_max_radius_scale=0.4,
+                 nms_mode="distance",
+                 nms_iou=0.3,
+                 count_mode="heads"):
+        # Device/setup
+        self.device = "cuda" if device == "cuda" and torch.cuda.is_available() else "cpu"
         try:
-            from ultralytics import YOLO  # type: ignore
-
-            # decide device
+            self.model = YOLO(yolo_weights)
+            if self.device == "cuda":
+                self.model.to("cuda")
+                torch.backends.cudnn.benchmark = True
+            # Fuse for faster inference where supported
             try:
-                import torch  # type: ignore
-
-                if use_gpu is not None:
-                    self.device = use_gpu
-                else:
-                    self.device = "cuda" if torch.cuda.is_available() else "cpu"
+                self.model.fuse()
             except Exception:
-                self.device = "cpu"
-
-            logger.info("Attempting to load YOLOv8 model (%s) on device=%s", yolo_weights, self.device)
-            self.model = YOLO(yolo_weights)  # will download if not present (requires internet)
-            self.use_yolo = True
-            logger.info("YOLOv8 loaded successfully.")
+                pass
         except Exception as e:
-            logger.warning("YOLOv8 not available or failed to load (%s). Falling back to OpenCV HOG. Error: %s", type(e).__name__, e)
-            self._init_hog()
+            raise RuntimeError(f"Failed to load YOLO model: {e}")
 
-    def _init_hog(self):
-        """Initialise OpenCV HOG person detector fallback."""
-        self.hog = cv2.HOGDescriptor()
-        self.hog.setSVMDetector(cv2.HOGDescriptor_getDefaultPeopleDetector())
-        self.use_yolo = False
-        logger.info("Initialized OpenCV HOG descriptor as fallback detector.")
+        # Config
+        self.min_head_radius = min_head_radius
+        self.max_head_radius = max_head_radius
+        self.conf_threshold = conf_threshold
+        self.iou_threshold = iou_threshold
+        self.imgsz = imgsz
+        self.max_det = max_det
+        self.head_top_ratio = head_top_ratio
+        self.head_radius_scale = head_radius_scale
+        self.circle_nms_factor = circle_nms_factor
+        self.min_bbox_area = int(min_bbox_area)
+        self.adaptive = adaptive
+        self.target_fps = max(5, int(target_fps))
+        self.min_imgsz = int(min_imgsz)
+        self.max_imgsz = int(max_imgsz)
+        self.enable_refine = bool(enable_refine)
+        self.refine_top_scale = float(refine_top_scale)
+        self.hough_dp = float(hough_dp)
+        self.hough_min_dist = int(hough_min_dist)
+        self.hough_param1 = float(hough_param1)
+        self.hough_param2 = float(hough_param2)
+        self.hough_min_radius_scale = float(hough_min_radius_scale)
+        self.hough_max_radius_scale = float(hough_max_radius_scale)
+        self.nms_mode = nms_mode
+        self.nms_iou = float(nms_iou)
+        self.count_mode = count_mode if count_mode in ("heads", "persons") else "heads"
 
-    # ---------------- Core API ----------------
-    def detect_frame(self, frame_bgr: np.ndarray) -> Tuple[int, List[Tuple[int, int, int, int]], np.ndarray]:
-        """
-        Detect people in a single BGR frame.
+        # State
+        self.frame_counter = 0
+        self.count_history = deque(maxlen=30)  # smoothing
+        self._last_infer_end_ts = None
 
-        Returns:
-            count (int): number of people detected (after filtering)
-            boxes (list of (x1, y1, x2, y2)): bounding boxes in pixel coordinates
-            annotated_bgr (np.ndarray): frame annotated with boxes and count (BGR)
-        """
-        if frame_bgr is None:
-            return 0, [], frame_bgr
+    def _nms_circles_area(self, circles, iou_thresh: float):
+        """Area-based NMS for circles using IoU of circle overlap."""
+        if not circles:
+            return []
+        circles_sorted = sorted(circles, key=lambda c: c[2], reverse=True)
+        kept = []
 
-        if self.use_yolo and self.model is not None:
-            try:
-                # ultralytics YOLO API: model.predict accepts numpy array as source
-                res = self.model.predict(source=frame_bgr, conf=self.conf, imgsz=640, verbose=False, device=self.device)
-                r = res[0]  # first (and only) result for this image
-                boxes: List[Tuple[int, int, int, int]] = []
-
-                # r.boxes may be a Boxes object with attributes xyxy and cls (tensors)
-                if hasattr(r, "boxes") and len(r.boxes) > 0:
-                    # get numpy arrays (works for CPU or CUDA tensors)
-                    try:
-                        xyxy = r.boxes.xyxy.cpu().numpy()
-                        cls = r.boxes.cls.cpu().numpy()
-                    except Exception:
-                        # if not on GPU or different structure
-                        xyxy = r.boxes.xyxy.numpy()
-                        cls = r.boxes.cls.numpy()
-
-                    for box, cls_id in zip(xyxy, cls):
-                        # COCO class 0 is 'person'
-                        if int(cls_id) == 0:
-                            x1, y1, x2, y2 = map(int, box[:4])
-                            boxes.append((x1, y1, x2, y2))
-                count = len(boxes)
-                annotated = self._annotate_frame(frame_bgr, boxes, count, source_label="YOLOv8")
-                return count, boxes, annotated
-            except Exception as e:
-                logger.warning("YOLO detection failed at runtime: %s. Falling back to HOG for this frame.", e)
-                # fallback to HOG detection for this frame
-                return self._detect_hog_frame(frame_bgr)
-        else:
-            # HOG fallback
-            return self._detect_hog_frame(frame_bgr)
-
-        def _detect_hog_frame(self, frame_bgr: np.ndarray) -> Tuple[int, List[Tuple[int, int, int, int]], np.ndarray]:
-            """Detect using OpenCV HOG person detector with NMS filtering."""
-        gray = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2GRAY)
-        rects, weights = self.hog.detectMultiScale(
-            gray, winStride=(8, 8), padding=(8, 8), scale=1.05
-        )
-
-        # Convert to (x, y, x2, y2) format for NMS
-        boxes = []
-        confidences = []
-        for (x, y, w, h), w_conf in zip(rects, weights):
-            boxes.append([int(x), int(y), int(x + w), int(y + h)])
-            confidences.append(float(w_conf))
-
-        # Apply Non-Maximum Suppression to filter overlapping boxes
-        indices = cv2.dnn.NMSBoxes(boxes, confidences, score_threshold=0.3, nms_threshold=0.4)
-
-        filtered_boxes: List[Tuple[int, int, int, int]] = []
-        if len(indices) > 0:
-            for i in indices.flatten():
-                filtered_boxes.append(tuple(boxes[i]))
-
-        count = len(filtered_boxes)
-        annotated = self._annotate_frame(frame_bgr, filtered_boxes, count, source_label="HOG+NMS")
-        return count, filtered_boxes, annotated
-
-    def _annotate_frame(self, frame_bgr: np.ndarray, boxes: List[Tuple[int, int, int, int]], count: int, source_label: str = "") -> np.ndarray:
-        """Draw bounding boxes and overlay count on the frame (BGR)."""
-        annotated = frame_bgr.copy()
-        for (x1, y1, x2, y2) in boxes:
-            cv2.rectangle(annotated, (x1, y1), (x2, y2), (0, 255, 0), 2)
-        # put count text top-left
-        txt = f"{source_label} Count: {count}" if source_label else f"Count: {count}"
-        color = (0, 0, 255) if count >= 120 else (255, 0, 0)  # highlight if near threshold (example)
-        cv2.putText(annotated, txt, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1.0, color, 2)
-        return annotated
-
-    # -------- streaming / processing helpers ----------
-    def stream(
-        self,
-        source: str | int = 0,
-        camera_id: Optional[str] = None,
-        sample_rate: int = 1,
-        max_frames: Optional[int] = None,
-        visualize: bool = True,
-        save_csv: Optional[str] = None,
-        timestamp_fmt: str = "%Y-%m-%dT%H:%M:%S%z",
-    ) -> Generator[Dict, None, None]:
-        """
-        Stream and analyze frames from a source (webcam index, file path, or rtsp url).
-
-        Args:
-            source: '0' or 0 for webcam index 0, or path to video file, or RTSP URL.
-            camera_id: optional id included in output.
-            sample_rate: process every n-th frame to reduce load (1 = every frame).
-            max_frames: limit number of analyzed frames (None = unlimited).
-            visualize: if True, show annotated frames in cv2 window and allow 'q' to quit.
-            save_csv: optional path to append counts as CSV (timestamp,frame_idx,count,boxes)
-            timestamp_fmt: format for timestamp (default ISO-like)
-
-        Yields:
-            dict with keys: timestamp, frame_idx, camera_id, count, boxes, annotated (BGR)
-        """
-        # open capture
-        try:
-            # if source is a digit string, convert to int
-            if isinstance(source, str) and source.isdigit():
-                src = int(source)
+        def circle_iou(c1, c2):
+            x1, y1, r1 = c1
+            x2, y2, r2 = c2
+            d = math.hypot(x1 - x2, y1 - y2)
+            if d >= r1 + r2:
+                return 0.0
+            if d <= abs(r1 - r2):
+                inter = math.pi * min(r1, r2) ** 2
             else:
-                src = source
-            cap = cv2.VideoCapture(src)
-            if not cap.isOpened():
-                logger.error("Unable to open video source: %s", source)
-                if not os.path.exists(source):
-                    logger.error("The file does not exist at the specified path: %s", source)
+                # ✅ FIXED: Proper exponentiation
+                alpha = math.acos((r1*2 + d2 - r2*2) / (2 * r1 * d))
+                beta = math.acos((r2*2 + d2 - r1*2) / (2 * r2 * d))
+                inter = r1*2 * alpha + r2*2 * beta - 0.5 * math.sqrt(
+                    max(0.0, (-d + r1 + r2) * (d + r1 - r2) * (d - r1 + r2) * (d + r1 + r2))
+                )
+            union = math.pi * r1*2 + math.pi * r2*2 - inter
+            return inter / union if union > 0 else 0.0
+
+        for c in circles_sorted:
+            keep = True
+            for k in kept:
+                if circle_iou(c, k) > iou_thresh:
+                    keep = False
+                    break
+            if keep:
+                kept.append(c)
+        return kept
+
+    def _refine_head_with_hough(self, frame_bgr, bbox):
+        """Refine head center within top region of bbox using HoughCircles."""
+        x1, y1, x2, y2 = bbox
+        h = max(1, y2 - y1)
+        w = max(1, x2 - x1)
+        top_h = max(4, int(h * self.refine_top_scale))
+        roi = frame_bgr[y1:y1 + top_h, x1:x2]
+        if roi.size == 0:
+            return None
+        gray = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
+        gray = cv2.medianBlur(gray, 5)
+
+        # Expected radius range based on bbox size
+        min_r = max(2, int(min(w, h) * self.hough_min_radius_scale))
+        max_r = max(min_r + 1, int(min(w, h) * self.hough_max_radius_scale))
+
+        circles = cv2.HoughCircles(
+            gray,
+            cv2.HOUGH_GRADIENT,
+            dp=self.hough_dp,
+            minDist=self.hough_min_dist,
+            param1=self.hough_param1,
+            param2=self.hough_param2,
+            minRadius=min_r,
+            maxRadius=max_r,
+        )
+        if circles is None:
+            return None
+        circles = np.round(circles[0, :]).astype(int)
+        # Choose the circle closest to the horizontal center
+        cx_global = x1 + w // 2
+        best = None
+        best_dist = 1e9
+        for (cx, cy, r) in circles:
+            gcx, gcy = x1 + int(cx), y1 + int(cy)
+            d = abs(gcx - cx_global)
+            if d < best_dist:
+                best_dist = d
+                best = (gcx, gcy, int(r))
+        return best
+
+    def _body_to_circular_head(self, bbox, frame_shape):
+        """Estimate head circle from person bounding box"""
+        x1, y1, x2, y2 = bbox
+        body_height = y2 - y1
+        body_width = x2 - x1
+
+        # Approximate head position near top of body
+        head_center_x = (x1 + x2) // 2
+        head_center_y = y1 + int(body_height * self.head_top_ratio)
+
+        # Clamp inside frame
+        head_center_x = max(0, min(head_center_x, frame_shape[1] - 1))
+        head_center_y = max(0, min(head_center_y, frame_shape[0] - 1))
+
+        # Estimate radius
+        head_radius = max(
+            self.min_head_radius,
+            min(int(min(body_width, body_height) * self.head_radius_scale), self.max_head_radius)
+        )
+        return (head_center_x, head_center_y, head_radius)
+
+    def _filter_overlapping_circles(self, circles, factor=None):
+        """Greedy NMS over head circles based on center distance.
+        Keeps larger circles first and removes neighbors within a fraction of min radius.
+        """
+        if not circles:
+            return []
+        # Sort by radius descending
+        circles_sorted = sorted(circles, key=lambda c: c[2], reverse=True)
+        kept = []
+        eff_factor = factor if factor is not None else self.circle_nms_factor
+        for cx, cy, r in circles_sorted:
+            keep = True
+            for kx, ky, kr in kept:
+                dist = math.hypot(cx - kx, cy - ky)
+                min_r = min(r, kr)
+                if dist < min_r * eff_factor:
+                    keep = False
+                    break
+            if keep:
+                kept.append((cx, cy, r))
+        return kept
+
+    def detect_circular_heads(self, frame_bgr):
+        """Run YOLO, detect people, convert to head circles. Returns (circles, boxes)."""
+        infer_start = time.time()
+        with torch.inference_mode():  # ✅ FIXED: Proper context manager
+            results = self.model.predict(
+                frame_bgr,
+                device=self.device,
+                conf=self.conf_threshold,
+                iou=self.iou_threshold,
+                imgsz=self.imgsz,
+                classes=[0],  # person
+                max_det=self.max_det,
+                half=(self.device == "cuda"),
+                verbose=False,
+            )
+        infer_end = time.time()
+        self._last_infer_end_ts = infer_end
+
+        circles = []
+        boxes = []
+        if results and len(results) > 0:
+            r = results[0]
+            if hasattr(r, "boxes") and r.boxes is not None and len(r.boxes) > 0:
+                xyxy = r.boxes.xyxy.cpu().numpy()
+                cls_ids = r.boxes.cls.cpu().numpy()
+
+                for i, box in enumerate(xyxy):
+                    if int(cls_ids[i]) == 0:  # person class
+                        x1, y1, x2, y2 = box.astype(int)
+                        area = max(0, (x2 - x1)) * max(0, (y2 - y1))
+                        if area < self.min_bbox_area:
+                            continue
+                        boxes.append((x1, y1, x2, y2))
+                        # Aspect-ratio aware head placement
+                        body_h = max(1, y2 - y1)
+                        body_w = max(1, x2 - x1)
+                        aspect = body_h / body_w
+                        # Adjust top ratio for very tall vs. squat boxes
+                        if aspect >= 2.0:
+                            adj_ratio = max(0.12, min(0.20, self.head_top_ratio * 0.9))
+                        elif aspect <= 1.2:
+                            adj_ratio = min(0.26, max(0.16, self.head_top_ratio * 1.2))
+                        else:
+                            adj_ratio = self.head_top_ratio
+                        orig_ratio = self.head_top_ratio
+                        self.head_top_ratio = adj_ratio
+                        circle = None
+                        if self.enable_refine:
+                            circle = self._refine_head_with_hough(frame_bgr, (x1, y1, x2, y2))
+                        if circle is None:
+                            circle = self._body_to_circular_head((x1, y1, x2, y2), frame_bgr.shape)
+                        self.head_top_ratio = orig_ratio
+                        if circle:
+                            circles.append(circle)
+
+        # Dynamic NMS factor: more suppression when many candidates
+        if self.nms_mode == "area":
+            circles = self._nms_circles_area(circles, iou_thresh=self.nms_iou)
+        else:
+            dynamic_factor = self.circle_nms_factor
+            if len(circles) > 120:
+                dynamic_factor = max(0.9, self.circle_nms_factor) * 1.25
+            elif len(circles) > 60:
+                dynamic_factor = max(0.85, self.circle_nms_factor) * 1.1
+            circles = self._filter_overlapping_circles(circles, factor=dynamic_factor)
+
+        # Adaptive imgsz to hit target FPS
+        if self.adaptive and self._last_infer_end_ts is not None:
+            infer_ms = (infer_end - infer_start) * 1000.0
+            if infer_ms > 0:
+                current_fps = 1000.0 / infer_ms
+                if current_fps < self.target_fps * 0.9 and self.imgsz > self.min_imgsz:
+                    self.imgsz = max(self.min_imgsz, self.imgsz - 64)
+                elif current_fps > self.target_fps * 1.2 and self.imgsz < self.max_imgsz:
+                    self.imgsz = min(self.max_imgsz, self.imgsz + 64)
+        return circles, boxes
+
+    def analyze_frame(self, frame_bgr, threshold=50, visualize=True):
+        """Main loop: detect heads, smooth count, visualize"""
+        self.frame_counter += 1
+        circles, boxes = self.detect_circular_heads(frame_bgr)
+
+        head_count = len(circles)
+        if self.count_mode == "persons":
+            head_count = len(boxes)
+        self.count_history.append(head_count)
+        avg_count = int(sum(self.count_history) / len(self.count_history))
+
+        alert_triggered = head_count >= 9
+        if alert_triggered:
+            print(f"[ALERT] Frame {self.frame_counter}: High crowd detected ({avg_count})")
+
+        if visualize:
+            display_frame = frame_bgr.copy()
+            if self.count_mode == "persons":
+                for idx, (x1, y1, x2, y2) in enumerate(boxes, 1):
+                    cv2.rectangle(display_frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
+                    cv2.putText(display_frame, str(idx), (x1, max(0, y1 - 5)),
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 1)
+            else:
+                if head_count < 100:
+                    for idx, (cx, cy, r) in enumerate(circles, 1):
+                        cv2.circle(display_frame, (cx, cy), r, (0, 255, 0), 2)
+                        cv2.putText(display_frame, str(idx), (cx - 5, cy - 5),
+                                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 1)
                 else:
-                    logger.error("The file exists but could not be opened. Check format or permissions.")
-                return
-        except Exception as e:
-            logger.exception("Error opening source %s: %s", source, e)
-            return
+                    for (cx, cy, _) in circles:
+                        cv2.circle(display_frame, (cx, cy), 2, (0, 255, 0), -1)
 
-        frame_idx = 0
-        saved_csv_header = False
-        if save_csv and not os.path.exists(save_csv):
-            saved_csv_header = True
+            count_text = f"Count : {head_count}"
+            cv2.putText(display_frame, count_text,
+                        (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
 
-        while True:
+            # Draw alert signal next to count when triggered
+            if alert_triggered:
+                text_size, _ = cv2.getTextSize(count_text, cv2.FONT_HERSHEY_SIMPLEX, 1, 2)
+                dot_x = 10 + text_size[0] + 16
+                dot_y = 30 - 10
+                cv2.circle(display_frame, (dot_x, dot_y), 8, (0, 0, 255), -1)
+
+            if alert_triggered:
+                cv2.putText(display_frame, "ALERT: Crowd Exceeded!",
+                            (10, 70), cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0, 0, 255), 3)
+            return display_frame, head_count, avg_count, alert_triggered
+
+        return None, head_count, avg_count, alert_triggered
+
+    def get_detection_data(self):
+        """Get current detection data as dictionary"""
+        return {
+            "timestamp": datetime.now().isoformat(),
+            "frame": self.frame_counter,
+            "count": len(self.count_history[-1]) if self.count_history else 0,
+            "average_count": int(sum(self.count_history) / len(self.count_history)) if self.count_history else 0,
+            "history": list(self.count_history)
+        }
+
+    def save_detection_json(self, filepath):
+        """Save detection data to JSON file"""
+        data = self.get_detection_data()
+        with open(filepath, 'w') as f:
+            json.dump(data, f, indent=2)
+        return data
+
+    def __call__(self, frame, device=None, classes=None):
+        """Make the class callable for detection"""
+        if device is None:
+            device = self.device
+        return self.model(frame, device=device, classes=classes)
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Crowd Detection and Analysis")
+    parser.add_argument("--source", required=True, help="Video source (file path or camera index)")
+    parser.add_argument("--weights", required=True, help="Path to YOLO weights file")
+    parser.add_argument("--device", default="cuda", choices=["cpu", "cuda"], help="Inference device")
+    parser.add_argument("--count-mode", default="persons", choices=["persons", "heads"], help="Counting mode")
+    parser.add_argument("--threshold", type=int, default=9, help="Crowd alert threshold")
+    args = parser.parse_args()
+    
+    cap = None  # Initialize cap in broader scope
+    
+    try:
+        analyzer = CrowdAnalyzer(
+            yolo_weights=args.weights,
+            device=args.device,
+            count_mode=args.count_mode
+        )
+        
+        cap = cv2.VideoCapture(args.source)
+        if not cap.isOpened():
+            raise RuntimeError(f"Failed to open video source: {args.source}")
+
+        print("Starting analysis... Press 'q' to quit")
+        
+        while cap.isOpened():
             ret, frame = cap.read()
             if not ret:
-                logger.info("End of stream or cannot fetch frame. Exiting stream loop.")
                 break
-            frame_idx += 1
-            if sample_rate > 1 and (frame_idx % sample_rate) != 0:
-                # optionally skip frames to save compute
-                if visualize:
-                    # still show un-annotated frame at lower rate? skipping for simplicity
-                    pass
-                continue
-
-            ts = datetime.utcnow().isoformat() + "Z"
-            count, boxes, annotated = self.detect_frame(frame)
-            row = {
-                "timestamp": ts,
-                "frame_idx": frame_idx,
-                "camera_id": camera_id or str(source),
-                "count": int(count),
-                "boxes": boxes,
-            }
-
-            # optionally append to CSV
-            if save_csv:
-                try:
-                    self._append_csv(save_csv, row, header=saved_csv_header)
-                    saved_csv_header = False
-                except Exception as e:
-                    logger.warning("Failed to write CSV row: %s", e)
-
-            # yield to caller
-            yield {
-                "timestamp": ts,
-                "frame_idx": frame_idx,
-                "camera_id": camera_id or str(source),
-                "count": int(count),
-                "boxes": boxes,
-                "annotated": annotated,
-            }
-
-            # visualization (blocking)
-            if visualize:
-                cv2.imshow(f"Detection - {camera_id or source}", annotated)
-                # press 'q' to quit
-                if cv2.waitKey(1) & 0xFF == ord("q"):
-                    logger.info("User requested quit (q). Exiting.")
-                    break
-
-            if max_frames is not None and frame_idx >= max_frames:
-                logger.info("Reached max_frames=%s; exiting stream.", max_frames)
+            
+            annotated, count, avg_count, alert = analyzer.analyze_frame(
+                frame, 
+                threshold=args.threshold, 
+                visualize=True
+            )
+            
+            cv2.imshow("Crowd Analyzer", annotated)
+            if cv2.waitKey(1) & 0xFF == ord("q"):
+                print("Quitting on user request")
                 break
 
-        cap.release()
-        if visualize:
-            cv2.destroyAllWindows()
-
-    # -------------------- utilities --------------------
-    @staticmethod
-    def _append_csv(csv_path: str, row: Dict, header: bool = False):
-        """Append a detection row (timestamp,frame_idx,camera_id,count,boxes_json) to CSV."""
-        boxes_json = json.dumps(row.get("boxes", []))
-        file_exists = os.path.exists(csv_path)
-        with open(csv_path, "a", newline="") as f:
-            writer = csv.writer(f)
-            if header and not file_exists:
-                writer.writerow(["timestamp", "frame_idx", "camera_id", "count", "boxes"])
-            writer.writerow([row["timestamp"], row["frame_idx"], row["camera_id"], row["count"], boxes_json])
-
-    # convenience wrapper for programmatic use
-    def analyze_frames_iterable(self, frames: Iterable[np.ndarray]) -> List[Dict]:
-        """Given an iterable of BGR frames, detect on each and return list of dicts."""
-        out = []
-        idx = 0
-        for frame in frames:
-            idx += 1
-            count, boxes, annotated = self.detect_frame(frame)
-            out.append({"frame_idx": idx, "count": count, "boxes": boxes, "annotated": annotated})
-        return out
-
-
-# ---------------------- CLI for quick test ----------------------
-def parse_args():
-    p = argparse.ArgumentParser("detection_model.py - YOLOv8 / HOG person detection tester")
-    p.add_argument("--source", "-s", type=str, default="0", help="Video source (0 for webcam, file path, or RTSP URL)")
-    p.add_argument("--weights", "-w", type=str, default="yolov8n.pt", help="YOLOv8 weights file (only used if ultralytics installed)")
-    p.add_argument("--conf", "-c", type=float, default=0.35, help="YOLO confidence threshold")
-    p.add_argument("--sample-rate", "-r", type=int, default=1, help="Process every Nth frame (1 = every frame)")
-    p.add_argument("--max-frames", type=int, default=None, help="Stop after analyzing this many frames")
-    p.add_argument("--save-csv", type=str, default=None, help="Append detection rows to this CSV file")
-    p.add_argument("--no-vis", action="store_true", help="Disable visualization windows")
-    p.add_argument("--camera-id", type=str, default=None, help="Optional camera id to log")
-    return p.parse_args()
-
-
-def main_cli():
-    args = parse_args()
-    det = PersonDetector(yolo_weights=args.weights, conf=args.conf)
-
-    # Preferred: allow --source arg. If not provided, use fallback video.
-    if args.source and args.source != "0":
-        video_source = args.source
-    else:
-        # Fallback path: change this to your OS path as needed.
-        # Use the Linux-style path if running in this environment:
-        fallback_path_unix = "/mnt/data/6574291-hd_1280_720_25fps.mp4"
-        # Windows example fallback (raw string) - uncomment if running on Windows local machine:
-        # fallback_path_win = r"C:\NOVA\crowd-predection\videos\6574291-hd_1280_720_25fps.mp4"
-        # Choose which fallback to use automatically based on platform:
-        if os.name == "nt":
-            # Windows
-            video_source = r"C:\NOVA\crowd-predection\videos\6574291-hd_1280_720_25fps.mp4"
-        else:
-            # Linux/macOS/Colab/remote runner where file was uploaded
-            video_source = fallback_path_unix
-
-    logger.info("Using video source: %s", video_source)
-
-    try:
-        for event in det.stream(
-            source=video_source,
-            camera_id=args.camera_id,
-            sample_rate=args.sample_rate,
-            max_frames=args.max_frames,
-            visualize=not args.no_vis,
-            save_csv=args.save_csv,
-        ):
-            # simple console output
-            logger.info("Frame %d | camera=%s | count=%d", event["frame_idx"], event["camera_id"], event["count"])
-    except KeyboardInterrupt:
-        logger.info("Interrupted by user.")
     except Exception as e:
-        logger.exception("Error during streaming: %s", e)
-
-
+        print(f"Error: {str(e)}")
+    finally:
+        if cap is not None:
+            cap.release()
+        cv2.destroyAllWindows()
 
 if __name__ == "__main__":
-    main_cli()
+    main()  # Move main logic to function

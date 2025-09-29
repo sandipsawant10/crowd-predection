@@ -17,8 +17,8 @@ import matplotlib.pyplot as plt
 import logging
 import sys
 import time
-import os
-import warnings
+import json
+from typing import List, Dict, Tuple
 
 from sklearn.linear_model import LinearRegression
 from sklearn.metrics import mean_squared_error
@@ -36,10 +36,6 @@ from tabulate import tabulate
 
 # Initialize colorama
 init(autoreset=True)
-
-# Suppress TensorFlow warnings
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
-warnings.filterwarnings('ignore')
 
 # ---------------- Logging Configuration ----------------
 logging.basicConfig(
@@ -165,13 +161,8 @@ def demo_run():
     lstm_model, lstm_preds = train_lstm_model(history_counts, look_back=5, n_steps=10, epochs=10)
     print_result_table(lstm_preds, "LSTM")
     
-    # Plot with enhanced styling and error handling
-    try:
-        plt.style.use(['seaborn-v0_8-darkgrid'])  # Using built-in style
-    except Exception:
-        # Fallback to default style if seaborn not available
-        plt.style.use('default')
-    
+    # Plot with enhanced styling
+    plt.style.use('seaborn')
     plt.figure(figsize=(12,6))
     plt.plot(history_counts, label="Historical Data", color='#2E86C1', linewidth=2)
     plt.plot(range(len(history_counts), len(history_counts)+10), 
@@ -201,6 +192,31 @@ def print_result_table(predictions, model_name):
     table_data = [[i+1, f"{pred:.1f}", conf] for i, (pred, conf) in enumerate(zip(predictions, confidence))]
     print(f"\n{Fore.GREEN}{model_name} Predictions:{Style.RESET_ALL}")
     print(tabulate(table_data, headers=headers, tablefmt="fancy_grid"))
+
+def load_detection_data(detection_data: List[Dict]) -> Tuple[List[str], List[int]]:
+    """Extract timestamps and counts from detection data"""
+    timestamps = [d["timestamp"] for d in detection_data]
+    counts = [d["count"] for d in detection_data]
+    return timestamps, counts
+
+def forecast_from_detections(detection_data: List[Dict], method="lstm", 
+                           look_back=30, n_steps=10) -> Dict:
+    """Generate forecasts from detection data"""
+    _, counts = load_detection_data(detection_data)
+    
+    if method.lower() == "lstm":
+        model, predictions = train_lstm_model(counts, 
+                                            look_back=look_back,
+                                            n_steps=n_steps)
+    else:
+        model, predictions = train_linear_model(counts, n_steps=n_steps)
+    
+    return {
+        "method": method,
+        "predictions": predictions,
+        "look_back": look_back,
+        "n_steps": n_steps
+    }
 
 # ---------------- Entry Point ----------------
 if __name__ == "__main__":

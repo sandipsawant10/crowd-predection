@@ -1,0 +1,212 @@
+[
+  {
+    "timestamp": "2025-09-30T03:23:19.508186",
+    "frame": 31,
+    "count": 14,
+    "average_count": 10.7,
+    "alert": true
+  },
+  {
+    "timestamp": "2025-09-30T03:23:19.876272",
+    "frame": 32,
+    "count": 14,
+    "average_count": 10.933333333333334,
+    "alert": true
+  },
+  {
+    "timestamp": "2025-09-30T03:23:20.266003",
+    "frame": 33,
+    "count": 12,
+    "average_count": 11.1,
+    "alert": true
+  },
+  {
+    "timestamp": "2025-09-30T03:23:20.493536",
+    "frame": 34,
+    "count": 12,
+    "average_count": 11.233333333333333,
+    "alert": true
+  },
+  {
+    "timestamp": "2025-09-30T03:23:20.740452",
+    "frame": 35,
+    "count": 11,
+    "average_count": 11.333333333333334,
+    "alert": true
+  },
+  {
+    "timestamp": "2025-09-30T03:23:21.090335",
+    "frame": 36,
+    "count": 11,
+    "average_count": 11.4,
+    "alert": true
+  },
+  {
+    "timestamp": "2025-09-30T03:23:21.400583",
+    "frame": 37,
+    "count": 12,
+    "average_count": 11.5,
+    "alert": true
+  },
+  {
+    "timestamp": "2025-09-30T03:23:21.679048",
+    "frame": 38,
+    "count": 11,
+    "average_count": 11.566666666666666,
+    "alert": true
+  },
+  {
+    "timestamp": "2025-09-30T03:23:21.966086",
+    "frame": 39,
+    "count": 11,
+    "average_count": 11.6,
+    "alert": true
+  },
+  {
+    "timestamp": "2025-09-30T03:23:22.288982",
+    "frame": 40,
+    "count": 10,
+    "average_count": 11.6,
+    "alert": true
+  },
+  {
+    "timestamp": "2025-09-30T03:23:22.589348",
+    "frame": 41,
+    "count": 11,
+    "average_count": 11.666666666666666,
+    "alert": true
+  },
+  {
+    "timestamp": "2025-09-30T03:23:22.987303",
+    "frame": 42,
+    "count": 11,
+    "average_count": 11.7,
+    "alert": true
+  },
+  {
+    "timestamp": "2025-09-30T03:23:23.318064",
+    "frame": 43,
+    "count": 11,
+    "average_count": 11.8,
+    "alert": true
+  },
+  {
+    "timestamp": "2025-09-30T03:23:23.561037",
+    "frame": 44,
+    "count": 14,
+    "average_count": 11.933333333333334,
+    "alert": true
+  },
+  {
+    "timestamp": "2025-09-30T03:23:23.853012",
+    "frame": 45,
+    "count": 14,
+    "average_count": 12.066666666666666,
+    "alert": true
+  },
+  {
+    "timestamp": "2025-09-30T03:23:24.162687",
+    "frame": 46,
+    "count": 13,
+    "average_count": 12.1,
+    "alert": true
+  },
+  {
+    "timestamp": "2025-09-30T03:23:24.561583",
+    "frame": 47,
+    "count": 13,
+    "average_count": 12.133333333333333,
+    "alert": true
+  },
+  {
+    "timestamp": "2025-09-30T03:23:24.795223",
+    "frame": 48,
+    "count": 13,
+    "average_count": 12.2,
+    "alert": true
+  },
+  {
+    "timestamp": "2025-09-30T03:23:25.114678",
+    "frame": 49,
+    "count": 13,
+    "average_count": 12.266666666666667,
+    "alert": true
+  },
+  {
+    "timestamp": "2025-09-30T03:23:25.342208",
+    "frame": 50,
+    "count": 11,
+    "average_count": 12.3,
+    "alert": true
+  },
+  {
+    "timestamp": "2025-09-30T03:23:25.613958",
+    "frame": 51,
+    "count": 11,
+    "average_count": 12.233333333333333,
+    "alert": true
+  },
+  {
+    "timestamp": "2025-09-30T03:23:25.841598",
+    "frame": 52,
+    "count": 11,
+    "average_count": 12.166666666666666,
+    "alert": true
+  },
+  {
+    "timestamp": "2025-09-30T03:23:26.129983",
+    "frame": 53,
+    "count": 13,
+    "average_count": 12.233333333333333,
+    "alert": true
+  },
+  {
+    "timestamp": "2025-09-30T03:23:26.470738",
+    "frame": 54,
+    "count": 11,
+    "average_count": 12.2,
+    "alert": true
+  },
+  {
+    "timestamp": "2025-09-30T03:23:26.729013",
+    "frame": 55,
+    "count": 11,
+    "average_count": 12.133333333333333,
+    "alert": true
+  },
+  {
+    "timestamp": "2025-09-30T03:23:27.093591",
+    "frame": 56,
+    "count": 10,
+    "average_count": 12.066666666666666,
+    "alert": true
+  },
+  {
+    "timestamp": "2025-09-30T03:23:27.529284",
+    "frame": 57,
+    "count": 13,
+    "average_count": 12.1,
+    "alert": true
+  },
+  {
+    "timestamp": "2025-09-30T03:23:27.949106",
+    "frame": 58,
+    "count": 11,
+    "average_count": 12.033333333333333,
+    "alert": true
+  },
+  {
+    "timestamp": "2025-09-30T03:23:28.367904",
+    "frame": 59,
+    "count": 11,
+    "average_count": 12.0,
+    "alert": true
+  },
+  {
+    "timestamp": "2025-09-30T03:23:28.804640",
+    "frame": 60,
+    "count": 9,
+    "average_count": 11.766666666666667,
+    "alert": false
+  }
+]
