@@ -1,0 +1,14 @@
+{
+  "timestamp": "2025-09-30T07:48:00.000Z",
+  "frame": 540,
+  "lstm_predictions": [
+    16.2, 15.8, 15.1, 14.7, 14.2, 13.9, 13.5, 13.1, 12.8, 12.4
+  ],
+  "linear_predictions": [
+    15.9, 15.4, 14.8, 14.3, 13.8, 13.4, 13.0, 12.6, 12.2, 11.9
+  ],
+  "window_size": 30,
+  "steps": 10,
+  "model_confidence": 0.88,
+  "prediction_interval_minutes": 0.5
+}
