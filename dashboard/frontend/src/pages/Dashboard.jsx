@@ -372,10 +372,12 @@ export default function Dashboard() {
     };
     try {
       await actionAPI.recordAction({
-        locationId: "live_detection",
-        actionType: "redirect_crowd",
+        action: "redirect_crowd",
+        cameraId: "live_detection",
         details: actionDetails.details,
         timestamp: new Date().toISOString(),
+        performedBy: "demo_user_id",
+        performedByUsername: userProfile?.name || "Demo User",
       });
       setActionsLog((prev) => [actionDetails, ...prev]);
       setLogs((prev) => [
@@ -386,11 +388,11 @@ export default function Dashboard() {
         },
         ...prev.slice(0, 19),
       ]);
-      alert("Redirect Crowd action triggered!");
+      window.alert("Redirect Crowd action triggered!");
     } catch (err) {
       console.error("Failed to record action:", err);
       setActionsLog((prev) => [actionDetails, ...prev]);
-      alert("Redirect Crowd action triggered! (Note: Legacy system)");
+      window.alert("Redirect Crowd action triggered! (Note: Legacy system)");
     }
   };
 
@@ -402,11 +404,12 @@ export default function Dashboard() {
     };
     try {
       await actionAPI.recordAction({
-        locationId: "live_detection",
-        actionType: "request_police",
+        action: "request_police",
+        cameraId: "live_detection",
         details: actionDetails.details,
         timestamp: new Date().toISOString(),
-        urgency: "high",
+        performedBy: "demo_user_id",
+        performedByUsername: userProfile?.name || "Demo User",
       });
       setActionsLog((prev) => [actionDetails, ...prev]);
       setLogs((prev) => [
@@ -417,11 +420,13 @@ export default function Dashboard() {
         },
         ...prev.slice(0, 19),
       ]);
-      alert("Request Police/Staff action triggered!");
+      window.alert("Request Police/Staff action triggered!");
     } catch (err) {
       console.error("Failed to record action:", err);
       setActionsLog((prev) => [actionDetails, ...prev]);
-      alert("Request Police/Staff action triggered! (Note: Legacy system)");
+      window.alert(
+        "Request Police/Staff action triggered! (Note: Legacy system)"
+      );
     }
   };
 
