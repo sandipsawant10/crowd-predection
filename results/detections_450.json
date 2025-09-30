@@ -1,0 +1,16 @@
+[
+  {
+    "timestamp": "2025-09-30T04:41:17.410Z",
+    "frame": 450,
+    "count": 42,
+    "average_count": 40.5,
+    "alert": true
+  },
+  {
+    "timestamp": "2025-09-30T04:41:17.435Z",
+    "frame": 451,
+    "count": 38,
+    "average_count": 39.2,
+    "alert": false
+  }
+]

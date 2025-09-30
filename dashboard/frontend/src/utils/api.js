@@ -267,28 +267,28 @@ export const resultAPI = {
   async getFiles() {
     return apiRequest("/results/files", {
       method: "GET",
-      headers: getHeaders(),
+      headers: getHeaders(false), // No auth required for result files
     });
   },
 
   async getFileContents(filename) {
     return apiRequest(`/results/files/${filename}`, {
       method: "GET",
-      headers: getHeaders(),
+      headers: getHeaders(false), // No auth required for result files
     });
   },
 
   async getLatest(type) {
     return apiRequest(`/results/latest/${type}`, {
       method: "GET",
-      headers: getHeaders(),
+      headers: getHeaders(false), // No auth required for result files
     });
   },
 
   async getStats() {
     return apiRequest("/results/stats", {
       method: "GET",
-      headers: getHeaders(),
+      headers: getHeaders(false), // No auth required for result files
     });
   },
 

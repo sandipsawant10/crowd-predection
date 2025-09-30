@@ -20,7 +20,6 @@ import api, {
   alertAPI,
   actionAPI,
   resultAPI,
-  fetchPeopleCount,
   fetchCrowdHistory,
   fetchCrowdForecast,
 } from "../utils/api";
@@ -30,8 +29,10 @@ export default function Dashboard() {
   const [isAuthenticated, setIsAuthenticated] = useState(null);
   const [userProfile, setUserProfile] = useState(null);
 
-  // Data sets - will be populated from actual detection files (frame numbers)
-  const [locations, setLocations] = useState([]);
+  // Live data states
+  const [currentView, setCurrentView] = useState("detection"); // "detection" or "forecast"
+  const [liveDetectionData, setLiveDetectionData] = useState(null);
+  const [liveForecastData, setLiveForecastData] = useState(null);
 
   const [systemHealth, setSystemHealth] = useState([
     { name: "Detection Model", status: "unknown" },
@@ -53,106 +54,131 @@ export default function Dashboard() {
   // File-based data states
   const [selectedFile, setSelectedFile] = useState(null);
 
-  // Load real locations from detection files with fallback
-  const loadRealLocations = async () => {
+  // Load live detection data from latest files
+  const loadLiveDetectionData = async () => {
     try {
-      const filesResponse = await resultAPI.getFiles();
+      // Get the latest detection file
+      const latestDetection = await resultAPI.getLatest("detection");
 
-      if (filesResponse.success && filesResponse.files) {
-        // Extract unique data sets from detection files
-        const detectionFiles = filesResponse.files.filter(
-          (f) => f.type === "detection"
-        );
-        const dataSetIds = [
-          ...new Set(
-            detectionFiles.map((f) => {
-              // Extract frame number from filename (e.g., detections_60.json -> dataset_60)
-              const match = f.filename.match(/detections_(\d+)\.json/);
-              return match ? `dataset_${match[1]}` : null;
-            })
-          ),
-        ].filter(Boolean);
+      if (latestDetection && latestDetection.success && latestDetection.data) {
+        const detectionData = latestDetection.data;
 
-        const realDataSets = dataSetIds.map((id, index) => ({
-          id,
-          name: `Frame Set ${id.replace("dataset_", "")}`,
-          x: 50 + index * 150, // Spread data sets across the view
-          y: 60 + index * 40,
-        }));
+        setLiveDetectionData({
+          data: detectionData,
+          lastUpdated: new Date(),
+        });
 
-        setLocations(realDataSets);
+        // Extract latest people count for display
+        const latestEntry = Array.isArray(detectionData)
+          ? detectionData[detectionData.length - 1]
+          : detectionData;
 
-        // Set first data set as default if none selected
-        if (realDataSets.length > 0 && !selectedLocation) {
-          setSelectedLocation(realDataSets[0].id);
+        if (latestEntry) {
+          setPeopleCount(latestEntry.count || 0);
+
+          // Set alert if needed
+          if (latestEntry.alert) {
+            setPopupAlert(true);
+            setAlertLog((prev) => [
+              {
+                time: new Date(latestEntry.timestamp).toLocaleTimeString(),
+                count: latestEntry.count,
+                type: "Live Detection Alert",
+              },
+              ...prev.slice(0, 19),
+            ]);
+          } else {
+            setPopupAlert(false);
+          }
         }
 
-        // Load crowd levels for all data sets
-        await loadAllLocationCrowdLevels(realDataSets);
+        // Update crowd history for charts
+        if (Array.isArray(detectionData)) {
+          setCrowdHistory(
+            detectionData.slice(-15).map((item) => ({
+              time: new Date(item.timestamp).toLocaleTimeString(),
+              count: item.count,
+            }))
+          );
+        }
       }
     } catch (error) {
-      console.warn("API unavailable, using offline demo locations:", error);
+      console.warn("Error loading live detection data:", error);
+      // Fallback to demo data
+      setPeopleCount(18);
+      setLiveDetectionData({
+        filename: "demo_detections.json",
+        data: [
+          { timestamp: new Date().toISOString(), count: 18, alert: false },
+        ],
+        lastUpdated: new Date(),
+      });
+    }
+  };
 
-      // Fallback to demo data sets when API is unavailable
-      const demoDataSets = [
-        { id: "dataset_60", name: "Frame Set 60", x: 50, y: 60 },
-        { id: "dataset_30", name: "Frame Set 30", x: 200, y: 100 },
-        { id: "dataset_90", name: "Frame Set 90", x: 350, y: 140 },
-      ];
+  // Load live forecast data from latest files
+  const loadLiveForecastData = async () => {
+    try {
+      // Get the latest forecast file
+      const latestForecast = await resultAPI.getLatest("forecast");
 
-      setLocations(demoDataSets);
+      if (latestForecast && latestForecast.success && latestForecast.data) {
+        const forecastData = latestForecast.data;
 
-      if (!selectedLocation && demoDataSets.length > 0) {
-        setSelectedLocation(demoDataSets[0].id);
+        setLiveForecastData({
+          data: forecastData,
+          lastUpdated: new Date(),
+        });
+
+        // Handle LSTM predictions from API (as used in fetchCrowdForecast)
+        let forecastArray = [];
+        if (
+          forecastData.lstm_predictions &&
+          Array.isArray(forecastData.lstm_predictions)
+        ) {
+          forecastArray = forecastData.lstm_predictions.map((count, index) => ({
+            in: index + 1,
+            count: Math.round(count * 100) / 100,
+            zone: count > 200 ? "danger" : count > 100 ? "warning" : "safe",
+          }));
+        } else if (
+          forecastData.linear_predictions &&
+          Array.isArray(forecastData.linear_predictions)
+        ) {
+          forecastArray = forecastData.linear_predictions.map(
+            (count, index) => ({
+              in: index + 1,
+              count: Math.round(count * 100) / 100,
+              zone: count > 200 ? "danger" : count > 100 ? "warning" : "safe",
+            })
+          );
+        }
+
+        setCrowdForecast(forecastArray);
+
+        // Check for forecast alerts
+        const dangerPrediction = forecastArray.find(
+          (item) => item.zone === "danger"
+        );
+        if (dangerPrediction) {
+          const alertMessage = `⚠ Predicted overcrowding in ${dangerPrediction.in} step(s).`;
+          setAlert(alertMessage);
+        } else {
+          setAlert("");
+        }
       }
-
-      // Set demo crowd levels
-      setLocationCrowdLevels({
-        dataset_60: { count: 12, zone: "warning" },
-        dataset_30: { count: 8, zone: "safe" },
-        dataset_90: { count: 15, zone: "danger" },
+    } catch (error) {
+      console.warn("Error loading live forecast data:", error);
+      // Fallback to demo data
+      setLiveForecastData({
+        filename: "demo_forecast.json",
+        data: [{ in: 5, count: 20, zone: "safe" }],
+        lastUpdated: new Date(),
       });
     }
   };
 
   // Load crowd levels for all locations
-  const loadAllLocationCrowdLevels = async (locationsList = locations) => {
-    try {
-      const crowdLevels = {};
-
-      // Load data for each data set
-      await Promise.all(
-        locationsList.map(async (location) => {
-          try {
-            const frameNumber = location.id.replace("dataset_", "");
-            const countData = await fetchPeopleCount(frameNumber);
-
-            if (countData) {
-              crowdLevels[location.id] = {
-                count: countData.count,
-                zone: countData.zone,
-              };
-            } else {
-              crowdLevels[location.id] = {
-                count: 0,
-                zone: "safe",
-              };
-            }
-          } catch (error) {
-            console.warn(`Error loading data for ${location.id}:`, error);
-            crowdLevels[location.id] = {
-              count: 0,
-              zone: "safe",
-            };
-          }
-        })
-      );
-
-      setLocationCrowdLevels(crowdLevels);
-    } catch (error) {
-      console.error("Error loading all location crowd levels:", error);
-    }
-  };
 
   // Setup WebSocket listeners for real-time updates
   const setupWebSocketListeners = () => {
@@ -160,52 +186,28 @@ export default function Dashboard() {
     webSocketService.on("fileUpdate", (event) => {
       console.log("Real-time file update received:", event);
 
-      // Refresh data when new files are detected
+      // Refresh live data when new files are detected
       if (event.type === "detection") {
-        // Reload data sets and crowd levels
-        loadRealLocations();
-        if (selectedLocation) {
-          // Reload selected data set immediately
-          const frameNumber = selectedLocation.replace("dataset_", "");
-          fetchPeopleCount(frameNumber).then((countData) => {
-            if (countData) {
-              setPeopleCount(countData.count);
-              setLocationCrowdLevels((prev) => ({
-                ...prev,
-                [selectedLocation]: {
-                  count: countData.count,
-                  zone: countData.zone,
-                },
-              }));
-            }
-          });
-        }
+        loadLiveDetectionData();
       } else if (event.type === "forecast") {
-        // Reload forecast data
-        if (selectedLocation) {
-          const frameNumber = selectedLocation.replace("dataset_", "");
-          fetchCrowdForecast(frameNumber).then((forecastData) => {
-            if (forecastData && forecastData.forecast) {
-              setCrowdForecast(forecastData.forecast);
-            }
-          });
-        }
+        loadLiveForecastData();
       }
     });
 
     // Listen for latest detection updates
     webSocketService.on("latestDetection", (data) => {
       console.log("Latest detection update received");
-      // Update current selection if it matches
-      if (data && selectedLocation) {
+      if (data) {
+        // Update people count and add to crowd history
         setPeopleCount(data.count || 0);
-        setLocationCrowdLevels((prev) => ({
-          ...prev,
-          [selectedLocation]: {
+        setCrowdHistory((prev) => [
+          ...prev.slice(-14), // Keep last 14 entries
+          {
+            time: new Date().toLocaleTimeString(),
             count: data.count || 0,
             zone: data.zone || "safe",
           },
-        }));
+        ]);
       }
     });
 
@@ -239,10 +241,6 @@ export default function Dashboard() {
     });
   };
 
-  // Real location data based on available detection files
-  const [selectedLocation, setSelectedLocation] = useState(null);
-  const [locationCrowdLevels, setLocationCrowdLevels] = useState({});
-
   // Authentication check (temporarily bypassed for development)
   useEffect(() => {
     const checkAuth = async () => {
@@ -273,10 +271,12 @@ export default function Dashboard() {
     checkAuth();
   }, []);
 
-  // Load real locations from detection files and setup WebSocket
+  // Load live data and setup WebSocket
   useEffect(() => {
     if (isAuthenticated) {
-      loadRealLocations();
+      // Load both detection and forecast data initially
+      loadLiveDetectionData();
+      loadLiveForecastData();
 
       // Connect to WebSocket if not already connected
       const token = localStorage.getItem("authToken");
@@ -295,17 +295,18 @@ export default function Dashboard() {
     };
   }, [isAuthenticated]);
 
-  // Periodically update all location crowd levels
+  // Auto-refresh live data based on current view
   useEffect(() => {
-    if (!isAuthenticated || locations.length === 0) return;
+    if (!isAuthenticated) return;
 
-    // Set up interval to refresh all location data
-    const interval = setInterval(() => {
-      loadAllLocationCrowdLevels();
-    }, 10000); // Update every 10 seconds
+    const refreshInterval = setInterval(() => {
+      // Always keep both detection and forecast data fresh
+      loadLiveDetectionData();
+      loadLiveForecastData();
+    }, 5000); // Refresh every 5 seconds
 
-    return () => clearInterval(interval);
-  }, [locations, isAuthenticated]);
+    return () => clearInterval(refreshInterval);
+  }, [isAuthenticated]);
 
   const handleLoginSuccess = (profile) => {
     setIsAuthenticated(true);
@@ -334,168 +335,6 @@ export default function Dashboard() {
 
   // NOTE: Camera fetching removed - using file-based system now
   // Legacy simulation for demonstration purposes
-
-  // Real-time people count from detection files
-  useEffect(() => {
-    if (!isAuthenticated || !selectedLocation) return;
-
-    const loadRealCount = async () => {
-      try {
-        // Extract frame number from selectedLocation (e.g., dataset_60 -> 60)
-        const frameNumber = selectedLocation.replace("dataset_", "");
-
-        // Get latest detection data for this frame set
-        const countData = await fetchPeopleCount(frameNumber);
-
-        if (countData) {
-          setPeopleCount(countData.count);
-          setLocationCrowdLevels((prev) => ({
-            ...prev,
-            [selectedLocation]: {
-              count: countData.count,
-              zone: countData.zone,
-            },
-          }));
-
-          // Check for alerts from real detection data
-          try {
-            const detectionFile = await resultAPI.getFileContents(
-              `detections_${frameNumber}.json`
-            );
-            if (detectionFile.success && detectionFile.data) {
-              const latestDetection =
-                detectionFile.data[detectionFile.data.length - 1];
-
-              if (latestDetection && latestDetection.alert) {
-                setPopupAlert(true);
-                setAlertLog((prev) => [
-                  {
-                    time: new Date(
-                      latestDetection.timestamp
-                    ).toLocaleTimeString(),
-                    count: latestDetection.count,
-                    type: "Real Detection Alert",
-                  },
-                  ...prev.slice(0, 19), // Keep last 20 alerts
-                ]);
-              } else {
-                setPopupAlert(false);
-              }
-            }
-          } catch (fileError) {
-            console.warn(
-              "Could not load detection file for alert check:",
-              fileError
-            );
-            setPopupAlert(false);
-          }
-        }
-      } catch (error) {
-        console.error("Error loading real people count:", error);
-        // Fallback to 0 if real data unavailable
-        setPeopleCount(0);
-        setLocationCrowdLevels((prev) => ({
-          ...prev,
-          [selectedLocation]: { count: 0, zone: "safe" },
-        }));
-        setPopupAlert(false);
-      }
-    };
-
-    // Load immediately
-    loadRealCount();
-
-    // Set up interval for real-time updates
-    const interval = setInterval(loadRealCount, 5000);
-    return () => clearInterval(interval);
-  }, [selectedLocation, isAuthenticated]);
-
-  // Real crowd history from detection files
-  useEffect(() => {
-    if (!isAuthenticated || !selectedLocation) return;
-
-    const loadRealHistory = async () => {
-      try {
-        // Extract frame number from selectedLocation (e.g., dataset_60 -> 60)
-        const frameNumber = selectedLocation.replace("dataset_", "");
-
-        // Get real crowd history for this frame set
-        const historyData = await fetchCrowdHistory(frameNumber, 15);
-
-        if (historyData && historyData.history) {
-          setCrowdHistory(historyData.history);
-        } else {
-          // Fallback to empty history if no data available
-          setCrowdHistory([]);
-        }
-      } catch (error) {
-        console.error("Error loading real crowd history:", error);
-        // Fallback to empty history
-        setCrowdHistory([]);
-      }
-    };
-
-    // Load immediately
-    loadRealHistory();
-
-    // Set up interval for updates (longer interval since history changes less frequently)
-    const interval = setInterval(loadRealHistory, 30000);
-    return () => clearInterval(interval);
-  }, [selectedLocation, isAuthenticated]);
-
-  // Real crowd forecast from forecast files
-  useEffect(() => {
-    if (!isAuthenticated || !selectedLocation) return;
-
-    const loadRealForecast = async () => {
-      try {
-        // Extract frame number from selectedLocation (e.g., dataset_60 -> 60)
-        const frameNumber = selectedLocation.replace("dataset_", "");
-
-        // Get real crowd forecast for this frame set
-        const forecastData = await fetchCrowdForecast(frameNumber);
-
-        if (forecastData && forecastData.forecast) {
-          setCrowdForecast(forecastData.forecast);
-
-          // Check for danger predictions in real forecast data
-          const danger = forecastData.forecast.find(
-            (item) => item.zone === "danger"
-          );
-          if (danger) {
-            const alertMessage = `⚠ Predicted overcrowding in ${danger.in} step(s).`;
-            setAlert(alertMessage);
-            setAlertLog((prev) => [
-              {
-                time: new Date().toLocaleTimeString(),
-                count: danger.count,
-                type: "Real Forecast Danger",
-              },
-              ...prev.slice(0, 19), // Keep last 20 alerts
-            ]);
-          } else {
-            setAlert("");
-          }
-        } else {
-          // Fallback to empty forecast if no data available
-          setCrowdForecast([]);
-          setAlert("");
-        }
-      } catch (error) {
-        console.error("Error loading real crowd forecast:", error);
-        // Fallback to empty forecast
-        setCrowdForecast([]);
-        setAlert("");
-      }
-    };
-
-    // Load immediately
-    loadRealForecast();
-
-    // Set up interval for updates (longer interval since forecasts change less frequently)
-    const interval = setInterval(loadRealForecast, 30000);
-    return () => clearInterval(interval);
-  }, [selectedLocation, isAuthenticated]);
 
   const chartData = {
     labels: crowdHistory.map((item) => item.time),
@@ -529,14 +368,11 @@ export default function Dashboard() {
     const actionDetails = {
       time: new Date().toLocaleTimeString(),
       action: "Redirect Crowd",
-      details: `Extra gates/signboards triggered for ${
-        locations.find((loc) => loc.id === selectedLocation)?.name ||
-        selectedLocation
-      }`,
+      details: "Extra gates/signboards triggered based on live detection data",
     };
     try {
       await actionAPI.recordAction({
-        locationId: selectedLocation,
+        locationId: "live_detection",
         actionType: "redirect_crowd",
         details: actionDetails.details,
         timestamp: new Date().toISOString(),
@@ -562,14 +398,11 @@ export default function Dashboard() {
     const actionDetails = {
       time: new Date().toLocaleTimeString(),
       action: "Request Police/Staff",
-      details: `Request sent for ${
-        locations.find((loc) => loc.id === selectedLocation)?.name ||
-        selectedLocation
-      }`,
+      details: "Emergency request sent based on live detection data",
     };
     try {
       await actionAPI.recordAction({
-        locationId: selectedLocation,
+        locationId: "live_detection",
         actionType: "request_police",
         details: actionDetails.details,
         timestamp: new Date().toISOString(),
@@ -625,34 +458,89 @@ export default function Dashboard() {
               <Card>
                 <CardContent>
                   <Typography variant="h6" gutterBottom>
-                    Analysis Data Sets
+                    Live Data View
                   </Typography>
+                  <Box sx={{ display: "flex", gap: 2, mb: 2 }}>
+                    <Box
+                      onClick={() => setCurrentView("detection")}
+                      sx={{
+                        p: 2,
+                        border: 1,
+                        borderColor:
+                          currentView === "detection"
+                            ? "primary.main"
+                            : "grey.300",
+                        borderRadius: 1,
+                        cursor: "pointer",
+                        bgcolor:
+                          currentView === "detection"
+                            ? "primary.light"
+                            : "background.paper",
+                        "&:hover": { bgcolor: "grey.100" },
+                        minWidth: 120,
+                        textAlign: "center",
+                      }}
+                    >
+                      <Typography variant="body2" fontWeight="bold">
+                        Detection
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        Live crowd detection
+                      </Typography>
+                    </Box>
+                    <Box
+                      onClick={() => setCurrentView("forecast")}
+                      sx={{
+                        p: 2,
+                        border: 1,
+                        borderColor:
+                          currentView === "forecast"
+                            ? "secondary.main"
+                            : "grey.300",
+                        borderRadius: 1,
+                        cursor: "pointer",
+                        bgcolor:
+                          currentView === "forecast"
+                            ? "secondary.light"
+                            : "background.paper",
+                        "&:hover": { bgcolor: "grey.100" },
+                        minWidth: 120,
+                        textAlign: "center",
+                      }}
+                    >
+                      <Typography variant="body2" fontWeight="bold">
+                        Forecast
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        Crowd predictions
+                      </Typography>
+                    </Box>
+                  </Box>
+
+                  {/* Live Data Display */}
                   <Box
-                    sx={{ display: "flex", gap: 2, mb: 2, flexWrap: "wrap" }}
+                    sx={{ mt: 2, p: 2, bgcolor: "grey.50", borderRadius: 1 }}
                   >
-                    {locations.map((location) => (
-                      <Box
-                        key={location.id}
-                        onClick={() => setSelectedLocation(location.id)}
-                        sx={{
-                          p: 2,
-                          border: 1,
-                          borderColor:
-                            selectedLocation === location.id
-                              ? "primary.main"
-                              : "grey.300",
-                          borderRadius: 1,
-                          cursor: "pointer",
-                          bgcolor:
-                            selectedLocation === location.id
-                              ? "primary.light"
-                              : "background.paper",
-                          "&:hover": { bgcolor: "grey.100" },
-                        }}
-                      >
-                        <Typography variant="body2">{location.name}</Typography>
-                      </Box>
-                    ))}
+                    <Typography variant="body2" color="text.secondary">
+                      Current View:{" "}
+                      <strong>
+                        {currentView === "detection"
+                          ? "Live Detection"
+                          : "Live Forecast"}
+                      </strong>
+                    </Typography>
+                    {currentView === "detection" && liveDetectionData && (
+                      <Typography variant="caption" color="text.secondary">
+                        Source: {liveDetectionData.filename} • Updated:{" "}
+                        {liveDetectionData.lastUpdated.toLocaleTimeString()}
+                      </Typography>
+                    )}
+                    {currentView === "forecast" && liveForecastData && (
+                      <Typography variant="caption" color="text.secondary">
+                        Source: {liveForecastData.filename} • Updated:{" "}
+                        {liveForecastData.lastUpdated.toLocaleTimeString()}
+                      </Typography>
+                    )}
                   </Box>
                 </CardContent>
               </Card>
@@ -662,71 +550,50 @@ export default function Dashboard() {
               <CrowdCountDisplay peopleCount={peopleCount} />
             </Grid>
 
-            <Grid item xs={12}>
-              <Card>
-                <CardContent>
-                  <Typography variant="h6" gutterBottom>
-                    Data Sets Overview
-                  </Typography>
-                  <Box
-                    sx={{
-                      display: "flex",
-                      gap: 3,
-                      flexWrap: "wrap",
-                      justifyContent: "center",
-                      p: 2,
-                    }}
-                  >
-                    {locations.map((location) => (
-                      <Box
-                        key={location.id}
-                        sx={{
-                          p: 2,
-                          border: 2,
-                          borderColor:
-                            locationCrowdLevels[location.id]?.zone === "danger"
-                              ? "error.main"
-                              : locationCrowdLevels[location.id]?.zone ===
-                                "warning"
-                              ? "warning.main"
-                              : "success.main",
-                          borderRadius: 2,
-                          textAlign: "center",
-                          minWidth: 120,
-                          bgcolor:
-                            selectedLocation === location.id
-                              ? "grey.100"
-                              : "background.paper",
-                        }}
-                      >
-                        <Typography variant="subtitle2" fontWeight="bold">
-                          {location.name}
-                        </Typography>
-                        <Typography
-                          variant="h6"
-                          color={
-                            locationCrowdLevels[location.id]?.zone === "danger"
-                              ? "error.main"
-                              : locationCrowdLevels[location.id]?.zone ===
-                                "warning"
-                              ? "warning.main"
-                              : "success.main"
-                          }
+            {currentView === "forecast" && crowdForecast.length > 0 && (
+              <Grid item xs={12} md={6}>
+                <Card>
+                  <CardContent>
+                    <Typography variant="h6" gutterBottom>
+                      Next Predictions
+                    </Typography>
+                    <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
+                      {crowdForecast.slice(0, 4).map((prediction, index) => (
+                        <Box
+                          key={index}
+                          sx={{
+                            p: 1,
+                            border: 1,
+                            borderColor:
+                              prediction.zone === "danger"
+                                ? "error.main"
+                                : prediction.zone === "warning"
+                                ? "warning.main"
+                                : "success.main",
+                            borderRadius: 1,
+                            minWidth: 80,
+                            textAlign: "center",
+                            bgcolor:
+                              prediction.zone === "danger"
+                                ? "error.light"
+                                : prediction.zone === "warning"
+                                ? "warning.light"
+                                : "success.light",
+                          }}
                         >
-                          {locationCrowdLevels[location.id]?.count || 0}
-                        </Typography>
-                        <Typography
-                          variant="caption"
-                          textTransform="capitalize"
-                        >
-                          {locationCrowdLevels[location.id]?.zone || "safe"}
-                        </Typography>
-                      </Box>
-                    ))}
-                  </Box>
-                </CardContent>
-              </Card>
-            </Grid>
+                          <Typography variant="caption" display="block">
+                            +{prediction.in} min
+                          </Typography>
+                          <Typography variant="h6" fontWeight="bold">
+                            {Math.round(prediction.count)}
+                          </Typography>
+                        </Box>
+                      ))}
+                    </Box>
+                  </CardContent>
+                </Card>
+              </Grid>
+            )}
 
             <Grid item xs={12}>
               <Card>
@@ -781,24 +648,28 @@ export default function Dashboard() {
               </Card>
             </Grid>
 
-            <Grid item xs={12} lg={6}>
-              <Card>
-                <CardContent>
-                  <ChartCrowdHistory chartData={chartData} />
-                </CardContent>
-              </Card>
-            </Grid>
+            {currentView === "detection" && (
+              <Grid item xs={12} lg={6}>
+                <Card>
+                  <CardContent>
+                    <ChartCrowdHistory chartData={chartData} />
+                  </CardContent>
+                </Card>
+              </Grid>
+            )}
 
-            <Grid item xs={12} lg={6}>
-              <Card>
-                <CardContent>
-                  <ChartCrowdForecast
-                    chartData={forecastChartData}
-                    alert={alert}
-                  />
-                </CardContent>
-              </Card>
-            </Grid>
+            {currentView === "forecast" && (
+              <Grid item xs={12} lg={6}>
+                <Card>
+                  <CardContent>
+                    <ChartCrowdForecast
+                      chartData={forecastChartData}
+                      alert={alert}
+                    />
+                  </CardContent>
+                </Card>
+              </Grid>
+            )}
 
             <Grid item xs={12} lg={6}>
               <Card>
