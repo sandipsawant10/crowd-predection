@@ -33,14 +33,18 @@ const connectDB = require("./src/config/database");
 const authRoutes = require("./src/routes/authRoutes");
 const crowdRoutes = require("./src/routes/crowdRoutes");
 const alertRoutes = require("./src/routes/alertRoutes");
-const cameraRoutes = require("./src/routes/cameraRoutes");
 const actionRoutes = require("./src/routes/actionRoutes");
+const resultRoutes = require("./src/routes/resultRoutes");
 
 // Import middleware
 const errorHandler = require("./src/middleware/errorHandler");
 
 // Import socket configuration
 const setupSocketHandlers = require("./src/config/socket");
+
+// Import file watcher service
+const FileWatcherService = require("./src/services/fileWatcherService");
+const fileWatcherService = FileWatcherService.instance;
 
 // Initialize express app
 const app = express();
@@ -148,10 +152,8 @@ app.use(
 app.use(
   "/api/crowd",
   (req, res, next) => {
-    // Only log prediction events
-    if (req.method === "POST" && req.originalUrl.includes("/predict")) {
-      console.log(`[IMPORTANT] Crowd prediction requested:`, req.body);
-    }
+    // NOTE: ML prediction logging removed - system now uses file-based monitoring
+    // Legacy endpoints redirect to file-based system
     next();
   },
   crowdRoutes
@@ -169,8 +171,6 @@ app.use(
   alertRoutes
 );
 
-app.use("/api/cameras", cameraRoutes); // No important logs needed
-
 app.use(
   "/api/actions",
   (req, res, next) => {
@@ -183,8 +183,8 @@ app.use(
   actionRoutes
 );
 
-// Setup Socket.io handlers
-setupSocketHandlers(io);
+// Results API for real-time file monitoring
+app.use("/api/results", resultRoutes);
 
 // Make io accessible to routes
 app.set("io", io);
@@ -201,6 +201,16 @@ app.use((req, res) => {
 const PORT = process.env.PORT || 5000;
 httpServer.listen(PORT, () => {
   console.log(`Server running in ${process.env.NODE_ENV} mode on port ${PORT}`);
+
+  // Initialize file watcher service
+  console.log("Starting file watcher service...");
+  fileWatcherService.startWatching();
+
+  // Make file watcher accessible to routes
+  app.set("fileWatcher", fileWatcherService);
+
+  // Setup Socket.io handlers after file watcher is initialized
+  setupSocketHandlers(io);
 });
 
 // Handle unhandled promise rejections

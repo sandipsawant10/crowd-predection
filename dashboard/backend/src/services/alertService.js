@@ -20,8 +20,8 @@ const alertService = {
         // Emit to all admins
         io.to("admin-alerts").emit("new-alert", alert);
 
-        // Emit to specific camera room
-        io.to(`camera-${alertData.cameraId}`).emit("new-alert", alert);
+        // NOTE: Camera room emission removed - use general alert room for file-based system
+        io.to("results-updates").emit("new-alert", alert);
       }
 
       return alert;

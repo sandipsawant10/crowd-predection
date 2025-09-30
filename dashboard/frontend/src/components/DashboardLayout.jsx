@@ -16,7 +16,6 @@ import {
   Menu as MenuIcon,
   Dashboard as DashboardIcon,
   Group as GroupIcon,
-  VideoCall as CameraIcon,
   Warning as AlertIcon,
   Settings as SettingsIcon,
   Logout as LogoutIcon,
@@ -95,11 +94,6 @@ const DashboardLayout = ({
       label: "Crowd Analytics",
       icon: <GroupIcon />,
       id: "analytics",
-    },
-    {
-      label: "Camera Management",
-      icon: <CameraIcon />,
-      id: "cameras",
     },
     {
       label: "Alert Center",

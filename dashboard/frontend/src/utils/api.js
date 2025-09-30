@@ -108,34 +108,37 @@ export const authAPI = {
   },
 };
 
-// Crowd Data API
+// Crowd Data API (Legacy - maintained for backward compatibility)
 export const crowdAPI = {
-  // Get latest crowd data for all cameras or specific camera
-  getLatest: async (cameraId = null) => {
-    const query = cameraId ? `?cameraId=${cameraId}` : "";
+  // Get latest crowd data (legacy endpoint)
+  getLatest: async (locationId = null) => {
+    // Support both locationId (new) and legacy cameraId for backward compatibility
+    const query = locationId ? `?cameraId=${locationId}` : "";
     return apiRequest(`/crowd/latest${query}`);
   },
 
-  // Get crowd history for a specific camera
+  // Get crowd history (legacy endpoint)
   getHistory: async (
-    cameraId,
+    locationId,
     limit = 100,
     startDate = null,
     endDate = null
   ) => {
-    let query = `?cameraId=${cameraId}&limit=${limit}`;
+    // Use locationId but send as cameraId for legacy API compatibility
+    let query = `?cameraId=${locationId}&limit=${limit}`;
     if (startDate) query += `&startDate=${startDate}`;
     if (endDate) query += `&endDate=${endDate}`;
 
     return apiRequest(`/crowd/history${query}`);
   },
 
-  // Get crowd statistics
-  getStats: async (cameraId, period = "day") => {
-    return apiRequest(`/crowd/stats?cameraId=${cameraId}&period=${period}`);
+  // Get crowd statistics (legacy endpoint)
+  getStats: async (locationId, period = "day") => {
+    // Use locationId but send as cameraId for legacy API compatibility
+    return apiRequest(`/crowd/stats?cameraId=${locationId}&period=${period}`);
   },
 
-  // Submit new crowd data
+  // Submit new crowd data (legacy endpoint)
   submitData: async (crowdData) => {
     return apiRequest("/crowd", {
       method: "POST",
@@ -200,40 +203,8 @@ export const alertAPI = {
   },
 };
 
-// Camera API
-export const cameraAPI = {
-  // Get all cameras
-  getAllCameras: async (activityThreshold = 5) => {
-    return apiRequest(`/cameras?activityThreshold=${activityThreshold}`, {
-      headers: getHeaders(),
-    });
-  },
-
-  // Get a specific camera by ID
-  getCamera: async (cameraId) => {
-    return apiRequest(`/cameras/byId/${cameraId}`, {
-      headers: getHeaders(),
-    });
-  },
-
-  // Register a new camera (admin only)
-  registerCamera: async (cameraData) => {
-    return apiRequest("/cameras", {
-      method: "POST",
-      headers: getHeaders(),
-      body: JSON.stringify(cameraData),
-    });
-  },
-
-  // Update a camera (admin only)
-  updateCamera: async (cameraId, cameraData) => {
-    return apiRequest(`/cameras/${cameraId}`, {
-      method: "PUT",
-      headers: getHeaders(),
-      body: JSON.stringify(cameraData),
-    });
-  },
-};
+// NOTE: Camera API removed - system now uses file-based monitoring
+// Legacy support maintained through simulation
 
 // Action API
 export const actionAPI = {
@@ -291,75 +262,197 @@ function getZoneFromCount(count) {
   return "safe";
 }
 
-// Legacy support functions for existing code
-export async function fetchPeopleCount(cameraId = null) {
+// File-based API functions for new system
+export const resultAPI = {
+  async getFiles() {
+    return apiRequest("/results/files", {
+      method: "GET",
+      headers: getHeaders(),
+    });
+  },
+
+  async getFileContents(filename) {
+    return apiRequest(`/results/files/${filename}`, {
+      method: "GET",
+      headers: getHeaders(),
+    });
+  },
+
+  async getLatest(type) {
+    return apiRequest(`/results/latest/${type}`, {
+      method: "GET",
+      headers: getHeaders(),
+    });
+  },
+
+  async getStats() {
+    return apiRequest("/results/stats", {
+      method: "GET",
+      headers: getHeaders(),
+    });
+  },
+
+  async cleanup(maxFiles = 50) {
+    return apiRequest("/results/cleanup", {
+      method: "POST",
+      headers: getHeaders(),
+      body: JSON.stringify({ maxFiles }),
+    });
+  },
+};
+
+// Legacy support functions updated to use file-based data
+export async function fetchPeopleCount(locationId = null) {
   try {
-    const data = await crowdAPI.getLatest(cameraId);
-    return {
-      count: data.data.count || 0,
-      timestamp: data.data.timestamp,
-      zone: getZoneFromCount(data.data.count),
-    };
-  } catch (error) {
-    console.error("Error fetching people count:", error);
-    return { count: 0, timestamp: new Date().toISOString(), zone: "safe" };
-  }
-}
+    // Try to get latest detection file instead of location/camera data
+    const data = await resultAPI.getLatest("detection");
 
-export async function fetchCrowdHistory(cameraId, limit = 15) {
-  try {
-    // Convert from minutes to proper time format
-    const endDate = new Date();
-    const startDate = new Date(endDate - limit * 60 * 1000);
-
-    const data = await crowdAPI.getHistory(
-      cameraId,
-      limit,
-      startDate.toISOString(),
-      endDate.toISOString()
-    );
-
-    // Format data for chart
-    return {
-      history: data.data.map((item) => ({
-        time: new Date(item.timestamp).toLocaleTimeString([], {
-          hour: "2-digit",
-          minute: "2-digit",
-        }),
-        count: item.count,
-        zone: getZoneFromCount(item.count),
-      })),
-    };
-  } catch (error) {
-    console.error("Error fetching crowd history:", error);
-    return { history: [] };
-  }
-}
-
-export async function fetchCrowdForecast(cameraId) {
-  try {
-    // For now, we'll use the latest crowd data which includes prediction array
-    const data = await crowdAPI.getLatest(cameraId);
-
-    if (!data.data.prediction || !Array.isArray(data.data.prediction)) {
-      return { forecast: [] };
+    if (data && data.success && data.data && data.data.length > 0) {
+      const latestDetection = data.data[data.data.length - 1];
+      return {
+        count: latestDetection.count || 0,
+        timestamp: latestDetection.timestamp,
+        zone: getZoneFromCount(latestDetection.count),
+      };
     }
 
-    // Process the prediction data from the latest crowd data
-    // The prediction array contains future values at regular intervals
-    const forecast = data.data.prediction.map((count, index) => {
-      // Each element is a prediction for the next "index+1" minutes
-      return {
-        in: index + 1,
-        count,
-        zone: getZoneFromCount(count),
-      };
-    });
-
-    return { forecast };
+    // Fallback to default if no detection data
+    return { count: 0, timestamp: new Date().toISOString(), zone: "safe" };
   } catch (error) {
-    console.error("Error fetching crowd forecast:", error);
+    console.error("Error fetching people count from detection files:", error);
+    // Fallback to legacy API if file-based fails (using locationId as legacy cameraId)
+    try {
+      const data = await crowdAPI.getLatest(locationId);
+      return {
+        count: data.data.count || 0,
+        timestamp: data.data.timestamp,
+        zone: getZoneFromCount(data.data.count),
+      };
+    } catch (legacyError) {
+      console.error("Legacy API also failed:", legacyError);
+      return { count: 0, timestamp: new Date().toISOString(), zone: "safe" };
+    }
+  }
+}
+
+export async function fetchCrowdHistory(locationId, limit = 15) {
+  try {
+    // Try to get latest detection file for historical data
+    const data = await resultAPI.getLatest("detection");
+
+    if (data && data.success && data.data && Array.isArray(data.data)) {
+      // Take the last 'limit' items from detection data
+      const recentData = data.data.slice(-limit);
+
+      return {
+        history: recentData.map((item) => ({
+          time: new Date(item.timestamp).toLocaleTimeString([], {
+            hour: "2-digit",
+            minute: "2-digit",
+          }),
+          count: item.count,
+          zone: getZoneFromCount(item.count),
+        })),
+      };
+    }
+
+    // Fallback to empty array if no detection data
+    return { history: [] };
+  } catch (error) {
+    console.error("Error fetching crowd history from detection files:", error);
+    // Fallback to legacy API (using locationId as legacy cameraId)
+    try {
+      const endDate = new Date();
+      const startDate = new Date(endDate - limit * 60 * 1000);
+
+      const data = await crowdAPI.getHistory(
+        locationId,
+        limit,
+        startDate.toISOString(),
+        endDate.toISOString()
+      );
+
+      return {
+        history: data.data.map((item) => ({
+          time: new Date(item.timestamp).toLocaleTimeString([], {
+            hour: "2-digit",
+            minute: "2-digit",
+          }),
+          count: item.count,
+          zone: getZoneFromCount(item.count),
+        })),
+      };
+    } catch (legacyError) {
+      console.error("Legacy API also failed:", legacyError);
+      return { history: [] };
+    }
+  }
+}
+
+export async function fetchCrowdForecast(locationId) {
+  try {
+    // Try to get latest forecast file instead of location/camera data
+    const data = await resultAPI.getLatest("forecast");
+
+    if (data && data.success && data.data) {
+      const forecastData = data.data;
+
+      // Use LSTM predictions as primary forecast
+      if (
+        forecastData.lstm_predictions &&
+        Array.isArray(forecastData.lstm_predictions)
+      ) {
+        const forecast = forecastData.lstm_predictions.map((count, index) => ({
+          in: index + 1,
+          count: Math.round(count * 100) / 100, // Round to 2 decimal places
+          zone: getZoneFromCount(count),
+        }));
+
+        return { forecast };
+      }
+
+      // Fallback to linear predictions if LSTM not available
+      if (
+        forecastData.linear_predictions &&
+        Array.isArray(forecastData.linear_predictions)
+      ) {
+        const forecast = forecastData.linear_predictions.map(
+          (count, index) => ({
+            in: index + 1,
+            count: Math.round(count * 100) / 100,
+            zone: getZoneFromCount(count),
+          })
+        );
+
+        return { forecast };
+      }
+    }
+
+    // Return empty forecast if no data
     return { forecast: [] };
+  } catch (error) {
+    console.error("Error fetching crowd forecast from forecast files:", error);
+    // Fallback to legacy API (using locationId as legacy cameraId)
+    try {
+      const data = await crowdAPI.getLatest(locationId);
+
+      if (!data.data.prediction || !Array.isArray(data.data.prediction)) {
+        return { forecast: [] };
+      }
+
+      const forecast = data.data.prediction.map((count, index) => {
+        return {
+          in: index + 1,
+          count,
+          zone: getZoneFromCount(count),
+        };
+      });
+
+      return { forecast };
+    } catch (legacyError) {
+      console.error("Legacy API also failed:", legacyError);
+      return { forecast: [] };
+    }
   }
 }
 
@@ -467,8 +560,8 @@ export default {
   auth: authAPI,
   crowd: crowdAPI,
   alert: alertAPI,
-  camera: cameraAPI,
   action: actionAPI,
+  result: resultAPI, // Add new result API
   fetchPeopleCount,
   fetchCrowdHistory,
   fetchCrowdForecast,

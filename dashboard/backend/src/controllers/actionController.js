@@ -1,6 +1,6 @@
 // src/controllers/actionController.js
+// NOTE: Camera model dependency removed - system now uses file-based monitoring
 const Action = require("../models/Action");
-const Camera = require("../models/Camera");
 const Alert = require("../models/Alert");
 
 /**
@@ -19,15 +19,9 @@ exports.recordAction = async (req, res, next) => {
       crowdCountBefore,
     } = req.body;
 
-    // Check if camera exists
-    const camera = await Camera.findOne({ cameraId });
-
-    if (!camera) {
-      return res.status(404).json({
-        success: false,
-        message: `Camera with ID ${cameraId} not found`,
-      });
-    }
+    // NOTE: Camera validation removed - system now supports location-based or legacy cameraId
+    // Accept locationId or cameraId for backward compatibility
+    const locationId = req.body.locationId || cameraId || "unknown";
 
     // Check if related alert exists if provided
     if (relatedAlertId) {
@@ -57,7 +51,8 @@ exports.recordAction = async (req, res, next) => {
     // Notify connected clients
     const io = req.app.get("io");
     if (io) {
-      io.to(`camera-${cameraId}`).emit("new-action", actionRecord);
+      // NOTE: Camera room emission removed - use general results room for file-based system
+      io.to("results-updates").emit("new-action", actionRecord);
       io.to("admin-alerts").emit("new-action", actionRecord);
     }
 

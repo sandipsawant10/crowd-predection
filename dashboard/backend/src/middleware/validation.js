@@ -20,14 +20,27 @@ exports.validate = (req, res, next) => {
 };
 
 /**
- * Validation rules for crowd data submission
+ * Validation rules for crowd data submission (Legacy - supports both locationId and cameraId)
  */
 exports.validateCrowdData = [
+  // Accept either locationId (new) or cameraId (legacy) for backward compatibility
+  body("locationId")
+    .optional()
+    .isString()
+    .withMessage("Location ID must be a string"),
+
   body("cameraId")
-    .notEmpty()
-    .withMessage("Camera ID is required")
+    .optional()
     .isString()
     .withMessage("Camera ID must be a string"),
+
+  // Require at least one identifier
+  body().custom((value, { req }) => {
+    if (!req.body.locationId && !req.body.cameraId) {
+      throw new Error("Either locationId or cameraId is required");
+    }
+    return true;
+  }),
 
   body("timestamp")
     .optional()
@@ -55,14 +68,27 @@ exports.validateCrowdData = [
 ];
 
 /**
- * Validation rules for alert creation
+ * Validation rules for alert creation (Updated for file-based system)
  */
 exports.validateAlert = [
+  // Accept either locationId (new) or cameraId (legacy) for backward compatibility
+  body("locationId")
+    .optional()
+    .isString()
+    .withMessage("Location ID must be a string"),
+
   body("cameraId")
-    .notEmpty()
-    .withMessage("Camera ID is required")
+    .optional()
     .isString()
     .withMessage("Camera ID must be a string"),
+
+  // Require at least one identifier
+  body().custom((value, { req }) => {
+    if (!req.body.locationId && !req.body.cameraId) {
+      throw new Error("Either locationId or cameraId is required");
+    }
+    return true;
+  }),
 
   body("timestamp")
     .optional()
@@ -94,46 +120,11 @@ exports.validateAlert = [
     .withMessage("Invalid trigger source"),
 ];
 
-/**
- * Validation rules for camera registration
- */
-exports.validateCamera = [
-  body("cameraId")
-    .notEmpty()
-    .withMessage("Camera ID is required")
-    .isString()
-    .withMessage("Camera ID must be a string"),
-
-  body("location")
-    .notEmpty()
-    .withMessage("Location is required")
-    .isString()
-    .withMessage("Location must be a string"),
-
-  body("status")
-    .optional()
-    .isIn(["active", "inactive", "maintenance", "offline"])
-    .withMessage("Invalid camera status"),
-
-  body("maxCapacity")
-    .optional()
-    .isInt({ min: 0 })
-    .withMessage("Maximum capacity must be a non-negative integer"),
-
-  body("alertThreshold")
-    .optional()
-    .isInt({ min: 0 })
-    .withMessage("Alert threshold must be a non-negative integer")
-    .custom((value, { req }) => {
-      if (req.body.maxCapacity && value > req.body.maxCapacity) {
-        throw new Error("Alert threshold cannot exceed maximum capacity");
-      }
-      return true;
-    }),
-];
+// NOTE: Camera validation rules removed - system now uses file-based monitoring
+// Legacy camera validation functionality no longer needed
 
 /**
- * Validation rules for action recording
+ * Validation rules for action recording (Updated for file-based system)
  */
 exports.validateAction = [
   body("action")
@@ -142,11 +133,24 @@ exports.validateAction = [
     .isString()
     .withMessage("Action type must be a string"),
 
+  // Accept either locationId (new) or cameraId (legacy) for backward compatibility
+  body("locationId")
+    .optional()
+    .isString()
+    .withMessage("Location ID must be a string"),
+
   body("cameraId")
-    .notEmpty()
-    .withMessage("Camera ID is required")
+    .optional()
     .isString()
     .withMessage("Camera ID must be a string"),
+
+  // Require at least one identifier
+  body().custom((value, { req }) => {
+    if (!req.body.locationId && !req.body.cameraId) {
+      throw new Error("Either locationId or cameraId is required");
+    }
+    return true;
+  }),
 
   body("timestamp")
     .optional()
@@ -217,10 +221,19 @@ exports.validatePagination = [
 ];
 
 /**
- * Validation for crowd history parameters
+ * Validation for crowd history parameters (Updated for file-based system)
  */
 exports.validateCrowdHistory = [
-  query("cameraId").notEmpty().withMessage("Camera ID is required"),
+  // Accept either locationId or cameraId for backward compatibility (both optional now)
+  query("locationId")
+    .optional()
+    .isString()
+    .withMessage("Location ID must be a string"),
+
+  query("cameraId")
+    .optional()
+    .isString()
+    .withMessage("Camera ID must be a string"),
 
   query("limit")
     .optional()

@@ -1,6 +1,6 @@
 // src/controllers/alertController.js
+// NOTE: Camera model dependency removed - system now uses file-based monitoring
 const Alert = require("../models/Alert");
-const Camera = require("../models/Camera");
 const alertService = require("../services/alertService");
 
 /**
@@ -10,21 +10,17 @@ const alertService = require("../services/alertService");
  */
 exports.createAlert = async (req, res, next) => {
   try {
-    const { cameraId, timestamp, type, message, triggeredBy } = req.body;
+    const { locationId, cameraId, timestamp, type, message, triggeredBy } =
+      req.body;
 
-    // Check if camera exists
-    const camera = await Camera.findOne({ cameraId });
-    if (!camera) {
-      return res.status(404).json({
-        success: false,
-        message: `Camera with ID ${cameraId} not found`,
-      });
-    }
+    // NOTE: Camera validation removed - system now supports location-based or legacy cameraId
+    // Use locationId if provided, fallback to cameraId for backward compatibility
+    const identifier = locationId || cameraId || "unknown";
 
     // Create the alert using the service
     const alert = await alertService.createAlert(
       {
-        cameraId,
+        cameraId: identifier, // Keep field name for backward compatibility
         timestamp: timestamp || Date.now(),
         type,
         message,
@@ -189,7 +185,8 @@ exports.updateAlertStatus = async (req, res, next) => {
 
     // Emit status update if Socket.io is available
     if (io) {
-      io.to(`camera-${alert.cameraId}`).emit("alert-status-update", alert);
+      // NOTE: Camera room emission removed - use general results room for file-based system
+      io.to("results-updates").emit("alert-status-update", alert);
       io.to("admin-alerts").emit("alert-status-update", alert);
     }
 
