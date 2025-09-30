@@ -183,6 +183,54 @@ app.use(
   actionRoutes
 );
 
+// System status endpoint for dashboard
+app.get("/api/system-status", cors(corsOptions), (req, res) => {
+  try {
+    const fileWatcher = app.get("fileWatcher");
+    const mongoose = require("mongoose");
+
+    const services = [
+      {
+        name: "Detection Model",
+        status:
+          fileWatcher &&
+          fileWatcher.getAvailableFiles().some((f) => f.type === "detection")
+            ? "running"
+            : "stopped",
+      },
+      {
+        name: "Forecasting Model",
+        status:
+          fileWatcher &&
+          fileWatcher.getAvailableFiles().some((f) => f.type === "forecast")
+            ? "running"
+            : "stopped",
+      },
+      {
+        name: "Alert Service",
+        status: mongoose.connection.readyState === 1 ? "running" : "stopped",
+      },
+      {
+        name: "File Watcher",
+        status: fileWatcher && fileWatcher.isActive ? "running" : "stopped",
+      },
+    ];
+
+    res.status(200).json({
+      success: true,
+      services,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error("Error checking system status:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to check system status",
+      error: error.message,
+    });
+  }
+});
+
 // Results API for real-time file monitoring
 app.use("/api/results", resultRoutes);
 

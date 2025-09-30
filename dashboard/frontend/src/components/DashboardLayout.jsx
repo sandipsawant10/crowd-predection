@@ -36,45 +36,21 @@ const DashboardLayout = ({
   userProfile,
   onLogout,
   isAuthenticated,
+  activeSection = "Dashboard Overview",
+  onNavigationChange,
 }) => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("md"));
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [activeSection, setActiveSection] = useState("Dashboard Overview");
 
   const handleDrawerToggle = () => {
     setMobileOpen(!mobileOpen);
   };
 
   const handleNavigationClick = (item) => {
-    setActiveSection(item.label);
-
-    // For now, we'll show a toast/alert for non-dashboard items
-    // In a real app, these would navigate to different pages or sections
-    if (item.label !== "Dashboard Overview") {
-      // Create a temporary notification
-      const notification = document.createElement("div");
-      notification.style.cssText = `
-        position: fixed;
-        top: 80px;
-        right: 20px;
-        background: ${theme.palette.primary.main};
-        color: white;
-        padding: 12px 24px;
-        border-radius: 8px;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-        z-index: 10000;
-        font-family: Roboto, sans-serif;
-        font-size: 14px;
-        font-weight: 500;
-      `;
-      notification.textContent = `${item.label} - Coming Soon!`;
-      document.body.appendChild(notification);
-
-      // Remove notification after 3 seconds
-      setTimeout(() => {
-        document.body.removeChild(notification);
-      }, 3000);
+    // Call the parent navigation handler if provided
+    if (onNavigationChange) {
+      onNavigationChange(item.label);
     }
 
     // Close mobile drawer after navigation

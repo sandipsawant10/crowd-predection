@@ -9,28 +9,22 @@ const {
   validatePagination,
 } = require("../middleware/validation");
 
-// Create a new alert - protected route
-router.post("/", protect, validateAlert, validate, alertController.createAlert);
+// Create a new alert - demo mode (no auth required)
+router.post("/", validateAlert, validate, alertController.createAlert);
 
-// Get all alerts with filters - protected route
-router.get(
-  "/",
-  protect,
-  validatePagination,
-  validate,
-  alertController.getAlerts
-);
+// Get all alerts with filters - demo mode (no auth required)
+router.get("/", validatePagination, validate, alertController.getAlerts);
 
-// Get alert statistics - protected route
-router.get("/stats", protect, alertController.getAlertStats);
+// Get alert statistics - demo mode (no auth required)
+router.get("/stats", alertController.getAlertStats);
 
-// Get a single alert - protected route
-router.get("/:id", protect, alertController.getAlert);
+// Get a single alert - demo mode (no auth required)
+router.get("/:id", alertController.getAlert);
 
-// Update alert status - protected route
-router.put("/:id/status", protect, alertController.updateAlertStatus);
+// Update alert status - demo mode (no auth required)
+router.put("/:id/status", alertController.updateAlertStatus);
 
-// Delete an alert - admin only
-router.delete("/:id", protect, authorize("admin"), alertController.deleteAlert);
+// Delete an alert - demo mode (no auth required)
+router.delete("/:id", alertController.deleteAlert);
 
 module.exports = router;

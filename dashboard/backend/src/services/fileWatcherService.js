@@ -293,6 +293,13 @@ class FileWatcherService extends EventEmitter {
   }
 
   /**
+   * Check if the file watcher is active
+   */
+  get isActive() {
+    return this.isWatching && this.watcher !== null;
+  }
+
+  /**
    * Get the latest file of a specific type
    */
   getLatestFile(type) {

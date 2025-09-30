@@ -16,8 +16,11 @@ import { Group as GroupIcon } from "@mui/icons-material";
  * - Icon and gradient styling
  * - Responsive typography
  */
-const CrowdCountDisplay = ({ peopleCount }) => {
+const CrowdCountDisplay = ({ count = 0, peopleCount, lastUpdated }) => {
   const theme = useTheme();
+
+  // Use count prop first, then peopleCount for backward compatibility
+  const displayCount = count !== undefined ? count : peopleCount || 0;
 
   // Determine color based on crowd count
   const getCountColor = (count) => {
@@ -26,7 +29,7 @@ const CrowdCountDisplay = ({ peopleCount }) => {
     return theme.palette.success.main;
   };
 
-  const countColor = getCountColor(peopleCount);
+  const countColor = getCountColor(displayCount);
 
   return (
     <Card
@@ -55,7 +58,7 @@ const CrowdCountDisplay = ({ peopleCount }) => {
                 lineHeight: 1,
               }}
             >
-              {peopleCount.toLocaleString()}
+              {displayCount?.toLocaleString() || "0"}
             </Typography>
           </Box>
           <Avatar
@@ -77,7 +80,9 @@ const CrowdCountDisplay = ({ peopleCount }) => {
             color: theme.palette.text.secondary,
           }}
         >
-          Real-time crowd monitoring
+          {lastUpdated
+            ? `Last updated: ${new Date(lastUpdated).toLocaleTimeString()}`
+            : "Real-time crowd monitoring"}
         </Typography>
       </CardContent>
     </Card>

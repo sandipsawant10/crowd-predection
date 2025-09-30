@@ -24,7 +24,7 @@ import {
  * - Professional status chips
  * - Responsive grid layout
  */
-export default function SystemHealth({ health }) {
+export default function SystemHealth({ health = [] }) {
   const theme = useTheme();
 
   const getStatusConfig = (status) => {
@@ -56,7 +56,7 @@ export default function SystemHealth({ health }) {
   return (
     <Box>
       <Grid container spacing={2}>
-        {health.map((service, idx) => {
+        {(Array.isArray(health) ? health : []).map((service, idx) => {
           const statusConfig = getStatusConfig(service.status);
 
           return (

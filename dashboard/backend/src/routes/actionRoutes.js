@@ -9,26 +9,14 @@ const {
   validatePagination,
 } = require("../middleware/validation");
 
-// Record a new action - protected route
-router.post(
-  "/",
-  protect,
-  validateAction,
-  validate,
-  actionController.recordAction
-);
+// Record a new action - demo mode (no auth required)
+router.post("/", validateAction, validate, actionController.recordAction);
 
-// Get all actions - protected route
-router.get(
-  "/",
-  protect,
-  validatePagination,
-  validate,
-  actionController.getActions
-);
+// Get all actions - demo mode (no auth required)
+router.get("/", validatePagination, validate, actionController.getActions);
 
-// Get action statistics - protected route
-router.get("/stats", protect, actionController.getActionStats);
+// Get action statistics - demo mode (no auth required)
+router.get("/stats", actionController.getActionStats);
 
 // Get a single action - protected route
 router.get("/:id", protect, actionController.getAction);

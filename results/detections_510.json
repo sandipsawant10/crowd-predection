@@ -1,0 +1,44 @@
+[
+  {
+    "timestamp": "2025-09-30T11:35:00.000Z",
+    "frame": 510,
+    "count": 150,
+    "average_count": 140.5,
+    "alert": true
+  },
+  {
+    "timestamp": "2025-09-30T11:35:30.000Z",
+    "frame": 511,
+    "count": 145,
+    "average_count": 142.2,
+    "alert": true
+  },
+  {
+    "timestamp": "2025-09-30T11:36:00.000Z",
+    "frame": 512,
+    "count": 160,
+    "average_count": 148.1,
+    "alert": true
+  },
+  {
+    "timestamp": "2025-09-30T11:36:30.000Z",
+    "frame": 513,
+    "count": 155,
+    "average_count": 152.7,
+    "alert": true
+  },
+  {
+    "timestamp": "2025-09-30T11:37:00.000Z",
+    "frame": 514,
+    "count": 170,
+    "average_count": 156.4,
+    "alert": true
+  },
+  {
+    "timestamp": "2025-09-30T11:37:30.000Z",
+    "frame": 515,
+    "count": 165,
+    "average_count": 159.1,
+    "alert": true
+  }
+]

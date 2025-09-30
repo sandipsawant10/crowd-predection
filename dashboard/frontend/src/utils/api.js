@@ -151,7 +151,7 @@ export const crowdAPI = {
 // Alert API
 export const alertAPI = {
   // Get all alerts with optional filtering
-  getAlerts: async (filters = {}) => {
+  getAll: async (filters = {}) => {
     const queryParams = new URLSearchParams();
 
     // Add filters to query params
@@ -164,17 +164,42 @@ export const alertAPI = {
     const queryString = queryParams.toString();
     const endpoint = queryString ? `/alerts?${queryString}` : "/alerts";
 
-    return apiRequest(endpoint, {
-      headers: getHeaders(),
-    });
+    try {
+      return await apiRequest(endpoint, {
+        headers: getHeaders(false), // No auth required for alert reading
+      });
+    } catch (error) {
+      // Return empty array for frontend components if API fails
+      console.warn("Alert API failed, returning empty array:", error);
+      return [];
+    }
+  },
+
+  // Legacy alias for backward compatibility
+  getAlerts: async (filters = {}) => {
+    return alertAPI.getAll(filters);
   },
 
   // Create a new alert
-  createAlert: async (alertData) => {
+  create: async (alertData) => {
     return apiRequest("/alerts", {
       method: "POST",
       headers: getHeaders(),
       body: JSON.stringify(alertData),
+    });
+  },
+
+  // Legacy alias for backward compatibility
+  createAlert: async (alertData) => {
+    return alertAPI.create(alertData);
+  },
+
+  // Update an alert
+  update: async (alertId, updateData) => {
+    return apiRequest(`/alerts/${alertId}`, {
+      method: "PUT",
+      headers: getHeaders(),
+      body: JSON.stringify(updateData),
     });
   },
 
@@ -184,6 +209,14 @@ export const alertAPI = {
       method: "PUT",
       headers: getHeaders(),
       body: JSON.stringify({ status }),
+    });
+  },
+
+  // Delete an alert
+  delete: async (alertId) => {
+    return apiRequest(`/alerts/${alertId}`, {
+      method: "DELETE",
+      headers: getHeaders(),
     });
   },
 
@@ -197,9 +230,21 @@ export const alertAPI = {
       query = query.replace(/&$/, "");
     }
 
-    return apiRequest(`/alerts/stats${query}`, {
-      headers: getHeaders(),
-    });
+    try {
+      return await apiRequest(`/alerts/stats${query}`, {
+        headers: getHeaders(false), // No auth required for stats
+      });
+    } catch (error) {
+      console.warn("Alert stats API failed:", error);
+      return {
+        total: 0,
+        active: 0,
+        resolved: 0,
+        high: 0,
+        medium: 0,
+        low: 0,
+      };
+    }
   },
 };
 
@@ -262,6 +307,141 @@ function getZoneFromCount(count) {
   return "safe";
 }
 
+// Analytics API for Crowd Analytics component
+export const analyticsAPI = {
+  // Get comprehensive analytics data
+  getAnalytics: async (timeRange = "24h") => {
+    try {
+      return await apiRequest(`/analytics?timeRange=${timeRange}`, {
+        headers: getHeaders(false), // No auth required
+      });
+    } catch (error) {
+      console.warn("Analytics API failed, using fallback:", error);
+      // Return fallback data structure
+      return {
+        summary: {
+          totalDetections: 0,
+          averageCrowd: 0,
+          peakCrowd: 0,
+          alertCount: 0,
+          peakHour: "N/A",
+        },
+        historical: [],
+        hourlyDistribution: [],
+        trendAnalysis: {
+          trend: "stable",
+          changePercent: 0,
+        },
+      };
+    }
+  },
+
+  // Get trend analysis
+  getTrends: async (period = "7d") => {
+    try {
+      return await apiRequest(`/analytics/trends?period=${period}`, {
+        headers: getHeaders(false),
+      });
+    } catch (error) {
+      console.warn("Trends API failed:", error);
+      return {
+        trend: "stable",
+        changePercent: 0,
+        periodComparison: null,
+      };
+    }
+  },
+};
+
+// System Settings API
+export const settingsAPI = {
+  // Get system settings
+  get: async () => {
+    try {
+      return await apiRequest("/settings", {
+        headers: getHeaders(),
+      });
+    } catch (error) {
+      console.warn("Settings API failed, using defaults:", error);
+      // Return default settings structure
+      return {
+        detection: {
+          enabled: true,
+          frameRate: 30,
+          detectionThreshold: 0.5,
+        },
+        forecast: {
+          enabled: true,
+          predictionWindow: 10,
+          modelType: "LSTM",
+        },
+        alerts: {
+          enabled: true,
+          crowdThreshold: 35,
+          enableEmailAlerts: true,
+        },
+        system: {
+          logLevel: "INFO",
+          enableDebugMode: false,
+        },
+      };
+    }
+  },
+
+  // Update system settings
+  update: async (settings) => {
+    try {
+      return await apiRequest("/settings", {
+        method: "PUT",
+        headers: getHeaders(),
+        body: JSON.stringify(settings),
+      });
+    } catch (error) {
+      console.warn("Settings update failed:", error);
+      throw error;
+    }
+  },
+
+  // Reset to default settings
+  reset: async () => {
+    try {
+      return await apiRequest("/settings/reset", {
+        method: "POST",
+        headers: getHeaders(),
+      });
+    } catch (error) {
+      console.warn("Settings reset failed:", error);
+      throw error;
+    }
+  },
+
+  // Export settings
+  export: async () => {
+    try {
+      return await apiRequest("/settings/export", {
+        headers: getHeaders(),
+      });
+    } catch (error) {
+      console.warn("Settings export failed:", error);
+      throw error;
+    }
+  },
+
+  // Import settings
+  import: async (settingsData) => {
+    try {
+      return await apiRequest("/settings/import", {
+        method: "POST",
+        headers: getHeaders(),
+        body: JSON.stringify(settingsData),
+      });
+    } catch (error) {
+      console.warn("Settings import failed:", error);
+      throw error;
+    }
+  },
+};
+
 // File-based API functions for new system
 export const resultAPI = {
   async getFiles() {
@@ -283,6 +463,44 @@ export const resultAPI = {
       method: "GET",
       headers: getHeaders(false), // No auth required for result files
     });
+  },
+
+  async getAll() {
+    try {
+      // Get all detection and forecast files for analytics
+      const files = await this.getFiles();
+      const allData = [];
+
+      if (files && files.files) {
+        // Get detection files
+        const detectionFiles = files.files.filter((f) =>
+          f.filename.startsWith("detections_")
+        );
+
+        // Get content from up to 10 recent detection files to avoid overwhelming the system
+        const recentFiles = detectionFiles.slice(-10);
+
+        for (const fileObj of recentFiles) {
+          const filename = fileObj.filename;
+          try {
+            const content = await this.getFileContents(filename);
+            if (content && content.data) {
+              allData.push(
+                ...(Array.isArray(content.data) ? content.data : [content.data])
+              );
+            }
+          } catch (error) {
+            console.warn(`Failed to load file ${filename}:`, error);
+          }
+        }
+      }
+
+      return allData;
+    } catch (error) {
+      console.warn("Failed to get all result data:", error);
+      // Return empty array as fallback
+      return [];
+    }
   },
 
   async getStats() {
@@ -561,9 +779,32 @@ export default {
   crowd: crowdAPI,
   alert: alertAPI,
   action: actionAPI,
-  result: resultAPI, // Add new result API
+  result: resultAPI,
+  analytics: analyticsAPI,
+  settings: settingsAPI,
   fetchPeopleCount,
   fetchCrowdHistory,
   fetchCrowdForecast,
-  diagnostic, // Add diagnostic functions
+  diagnostic,
+  getSystemStatus,
 };
+
+// System Status API
+export async function getSystemStatus() {
+  try {
+    return await apiRequest("/system-status", {
+      method: "GET",
+    });
+  } catch (error) {
+    console.error("Failed to get system status:", error);
+    return {
+      success: false,
+      services: [
+        { name: "Detection Model", status: "unknown" },
+        { name: "Forecasting Model", status: "unknown" },
+        { name: "Alert Service", status: "unknown" },
+        { name: "File Watcher", status: "unknown" },
+      ],
+    };
+  }
+}
